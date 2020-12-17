@@ -3,6 +3,7 @@ github.com/cespare/xxhash/v2
 # github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
 github.com/dgryski/go-rendezvous
 # github.com/go-redis/redis/v8 v8.4.4
+## explicit
 github.com/go-redis/redis/v8
 github.com/go-redis/redis/v8/internal
 github.com/go-redis/redis/v8/internal/hashtag
@@ -25,4 +26,5 @@ go.opentelemetry.io/otel/propagation
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/unit
 # gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+## explicit
 gopkg.in/yaml.v3

@@ -1,0 +1,20 @@
+# Copyright 2020 Changkun Ou. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+title: "Changkun Ou | changkun.de"
+host: https://changkun.de
+addr: :9123
+store: redis://redis:6379/9
+s:
+  prefix: /s/
+r:
+  length: 6
+  prefix: /r/
+x:
+  prefix: /x/
+  vcs: git
+  import_path: changkun.de/x/*
+  repo_path: https://github.com/changkun/*
+  godoc_host: https://pkg.go.dev/
+google_analytics: UA-80889616-2

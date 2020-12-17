@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ .GoogleAnalytics }}"></script>
+  <script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{{ .GoogleAnalytics }}');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>changkun.de/s/redir</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+  <style>
+  :root {
+    --gray-1: #202224;
+    --gray-2: #3e4042;
+    --gray-3: #555759;
+    --gray-4: #6e7072;
+    --gray-5: #848688;
+    --gray-6: #aaacae;
+    --gray-7: #c6c8ca;
+    --gray-8: #dcdee0;
+    --gray-9: #f0f1f2;
+    --gray-10: #fafafa;
+    --turq-light: #5dc9e2;
+    --turq-med: #00add8;
+    --turq-dark: #007d9c;
+    --blue: #92e1f3;
+    --green: #00a29c;
+    --pink: #ce3262;
+    --purple: #542c7d;
+    --slate: #253443;
+    --white: #fff;
+    --yellow: #fddd00;
+    --header-height: 3.5rem;
+  }
+  body {
+    margin: 0;
+    font-family: Roboto, sans-serif;
+    background-color: var(--gray-1);
+    color: var(--gray-6);
+  }
+  table {
+    text-align: left;
+  }
+  body {
+    background-color: var(--gray-2);
+  }
+  a {
+    color: var(--turq-med);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--turq-med);
+    text-decoration: none;
+  }
+  #app {
+    padding: 20px;
+  }
+  </style>
+</head>
+<body>
+<div id="app" class="bg-dark">
+  <h1>changkun.de</h1>
+  <h5><a href="https://changkun.de/s/redir">Request redirector</a></h5>
+  <table class="table table-striped table-dark" style="width:100%">
+    <tr>
+      <th>PV/UV</th>
+      <th>URL</th>
+    </tr>
+    {{range .Records}}
+    <tr>
+      <td>{{ .PV }}/{{ .UV }}</td>
+      <td><a href="{{ $.Host }}{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a></td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+</body>
+</html>

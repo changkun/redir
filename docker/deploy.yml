@@ -1,0 +1,37 @@
+# Copyright 2020 Changkun Ou. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+version: "3"
+services:
+  redir:
+    container_name: redir
+    restart: always
+    image: redir:latest
+    environment:
+      REDIR_CONF: ./data/redirconf.yml
+    ports:
+      - "9123:9123"
+    depends_on:
+      - redis
+    networks:
+      redirnet:
+        ipv4_address: 172.16.1.10
+  redis:
+    container_name: redis
+    restart: always
+    volumes:
+      - ../data/redis:/data
+    image: redis:6.0
+    ports:
+      - "6379:6379"
+    networks:
+      redirnet:
+        ipv4_address: 172.16.1.11
+networks:
+  redirnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.1.0/24
