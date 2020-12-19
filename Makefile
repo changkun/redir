@@ -16,6 +16,7 @@ build:
 	GOOS=linux go build $(BUILD_FLAGS)
 	docker build -t $(IMAGE):$(VERSION) -t $(IMAGE):latest -f docker/Dockerfile .
 up: down
+	GOOS=linux go build $(BUILD_FLAGS)
 	docker-compose -f docker/deploy.yml up -d
 down:
 	docker-compose -f docker/deploy.yml down

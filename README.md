@@ -7,7 +7,6 @@ The request redirector for changkun.de.
 Deploy:
 
 ```
-make build
 make up
 ```
 
