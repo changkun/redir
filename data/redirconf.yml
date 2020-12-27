@@ -4,7 +4,7 @@
 
 title: "Changkun Ou | changkun.de"
 host: https://changkun.de
-addr: :9123
+addr: redir:80
 store: redis://redis:6379/9
 s:
   prefix: /s/

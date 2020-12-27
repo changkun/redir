@@ -7,13 +7,13 @@ The request redirector for changkun.de.
 Deploy:
 
 ```
-make up
+$ docker network create traefik_proxy
+$ make build && make up
 ```
 
 CLI:
 
 ```
-go install changkun.de/x/redir@latest
 redir -a changkun -l https://changkun.de
 redir -l https://changkun.de
 redir -f import.yml

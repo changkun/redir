@@ -60,7 +60,7 @@ func main() {
 func runServer() {
 	s := newServer(context.Background())
 	s.registerHandler()
-	log.Printf("serving at localhost%s\n", conf.Addr)
+	log.Printf("serving at %s\n", conf.Addr)
 	if err := http.ListenAndServe(conf.Addr, nil); err != nil {
 		log.Printf("ListenAndServe %s: %v\n", conf.Addr, err)
 	}

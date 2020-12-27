@@ -13,13 +13,12 @@ all:
 run:
 	./$(BINARY) -s
 build:
-	GOOS=linux go build $(BUILD_FLAGS)
-	docker build -t $(IMAGE):$(VERSION) -t $(IMAGE):latest -f docker/Dockerfile .
-up: down
-	GOOS=linux go build $(BUILD_FLAGS)
-	docker-compose -f docker/deploy.yml up -d
+	CGO_ENABLED=0 GOOS=linux go build $(BUILD_FLAGS)
+	docker build -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+up:
+	docker-compose up -d
 down:
-	docker-compose -f docker/deploy.yml down
+	docker-compose down
 clean:
 	rm -rf $(BINARY)
 	docker rmi -f $(shell docker images -f "dangling=true" -q) 2> /dev/null; true

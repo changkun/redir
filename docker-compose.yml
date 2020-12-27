@@ -5,36 +5,26 @@
 version: "3"
 services:
   redir:
-    build:
-      context: ../
-      dockerfile: docker/Dockerfile
-    container_name: redir
     restart: always
     image: redir:latest
     environment:
       REDIR_CONF: ./data/redirconf.yml
-    ports:
-      - "9123:9123"
     depends_on:
       - redis
+    deploy:
+      replicas: 3
     networks:
-      redirnet:
-        ipv4_address: 172.16.1.10
+      - traefik_proxy
   redis:
     container_name: redis
     restart: always
     volumes:
-      - ../data/redis:/data
+      - ./data/redis:/data
     image: redis:6.0
     ports:
       - "6379:6379"
     networks:
-      redirnet:
-        ipv4_address: 172.16.1.11
+      - traefik_proxy
 networks:
-  redirnet:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.16.1.0/24
+  traefik_proxy:
+    external: true
