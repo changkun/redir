@@ -5,13 +5,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -48,7 +46,7 @@ func (o op) valid() bool {
 func importFile(fname string) {
 	b, err := os.ReadFile(fname)
 	if err != nil {
-		log.Fatalf("cannot read import file, err: %v\n", err)
+		log.Fatalf("cannot read import file: %v\n", err)
 	}
 
 	var d struct {
@@ -57,7 +55,7 @@ func importFile(fname string) {
 	}
 	err = yaml.Unmarshal(b, &d)
 	if err != nil {
-		log.Fatalf("cannot unmarshal the imported file, err: %v\n", err)
+		log.Fatalf("cannot unmarshal the imported file: %v\n", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
@@ -66,7 +64,7 @@ func importFile(fname string) {
 		if err != nil {
 			err = shortCmd(ctx, opCreate, alias, link)
 			if err != nil {
-				log.Printf("cannot import alias %v, err: %v\n", alias, err)
+				log.Printf("cannot import alias %v: %v\n", alias, err)
 			}
 		}
 	}
@@ -76,7 +74,7 @@ func importFile(fname string) {
 			for i := 0; i < 10; i++ { // try 10x maximum
 				err = shortCmd(ctx, opCreate, "", link)
 				if err != nil {
-					log.Printf("cannot create alias %v, err: %v\n", alias, err)
+					log.Printf("cannot create alias %v: %v\n", alias, err)
 					continue
 				}
 				break
@@ -90,14 +88,14 @@ func importFile(fname string) {
 func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 	s, err := newStore(conf.Store)
 	if err != nil {
-		err = fmt.Errorf("cannot create a new alias, err: %w", err)
+		err = fmt.Errorf("cannot create a new alias: %w", err)
 		return
 	}
 	defer s.Close()
 
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("cannot %v alias to data store, err: %w", operate, err)
+			err = fmt.Errorf("cannot %v alias to data store: %w", operate, err)
 		}
 	}()
 
@@ -152,8 +150,8 @@ func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 
 // shortHandler redirects the current request to a known link if the alias is
 // found in the redir store.
-func (s *server) shortHandler(kind aliasKind) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *server) shortHandler(kind aliasKind) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		var err error
@@ -178,7 +176,7 @@ func (s *server) shortHandler(kind aliasKind) func(http.ResponseWriter, *http.Re
 
 		alias := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, prefix), "/")
 		if alias == "" {
-			err = s.stats(ctx, kind, w)
+			err = s.stats(ctx, kind, w, r)
 			return
 		}
 
@@ -199,8 +197,27 @@ func (s *server) shortHandler(kind aliasKind) func(http.ResponseWriter, *http.Re
 		http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 
 		// count visit in another goroutine so it won't block the redirect.
-		go func() { s.visitCh <- visit{s.readIP(r), alias} }()
-	}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			ip := readIP(r)
+			_, err := s.db.FetchIP(context.Background(), ip)
+			if errors.Is(err, redis.Nil) {
+				err = s.db.StoreIP(ctx, ip, alias) // new ip
+				if err != nil {
+					log.Printf("failt to store ip: %v", err)
+				}
+			} else if err != nil {
+				log.Printf("cannot fetch data store for ip processing: %v\n", err)
+			} else {
+				err = s.db.UpdateIP(ctx, ip, alias) // old ip
+				if err != nil {
+					log.Printf("failt to update ip: %v", err)
+				}
+			}
+		}()
+	})
 }
 
 // checkdb checks whether the given alias is exsited in the redir database,
@@ -255,31 +272,6 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	return tryPath, nil
 }
 
-// readIP implements a best effort approach to return the real client IP,
-// it parses X-Real-IP and X-Forwarded-For in order to work properly with
-// reverse-proxies such us: nginx or haproxy. Use X-Forwarded-For before
-// X-Real-Ip as nginx uses X-Real-Ip with the proxy's IP.
-//
-// This implementation is derived from gin-gonic/gin.
-func (s *server) readIP(r *http.Request) string {
-	clientIP := r.Header.Get("X-Forwarded-For")
-	clientIP = strings.TrimSpace(strings.Split(clientIP, ",")[0])
-	if clientIP == "" {
-		clientIP = strings.TrimSpace(r.Header.Get("X-Real-Ip"))
-	}
-	if clientIP != "" {
-		return clientIP
-	}
-	if addr := r.Header.Get("X-Appengine-Remote-Addr"); addr != "" {
-		return addr
-	}
-	ip, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err != nil {
-		return "unknown" // use unknown to guarantee non empty string
-	}
-	return ip
-}
-
 type arecords struct {
 	Title           string
 	Host            string
@@ -288,7 +280,7 @@ type arecords struct {
 	GoogleAnalytics string
 }
 
-func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter) (retErr error) {
+func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) (retErr error) {
 	aliases, retErr := s.db.Keys(ctx, prefixalias+"*")
 	if retErr != nil {
 		return
@@ -304,7 +296,7 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 
 	ars := arecords{
 		Title:           conf.Title,
-		Host:            conf.Host,
+		Host:            r.Host,
 		Prefix:          prefix,
 		Records:         []arecord{},
 		GoogleAnalytics: conf.GoogleAnalytics,
@@ -335,30 +327,9 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		return ars.Records[i].UV > ars.Records[j].UV
 	})
 
-	var buf bytes.Buffer
-	retErr = statsTmpl.Execute(&buf, ars)
+	retErr = statsTmpl.Execute(w, ars)
 	if retErr != nil {
 		return
 	}
-	w.Write(buf.Bytes())
 	return
-}
-
-func (s *server) counting(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case visit := <-s.visitCh:
-			_, err := s.db.FetchIP(context.Background(), visit.ip)
-			if errors.Is(err, redis.Nil) {
-				s.db.StoreIP(ctx, visit.ip, visit.alias) // new ip
-			} else if err != nil {
-				log.Printf("cannot fetch data store for ip processing, err: %v\n", err)
-				continue
-			} else {
-				s.db.UpdateIP(ctx, visit.ip, visit.alias) // old ip
-			}
-		}
-	}
 }

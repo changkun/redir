@@ -5,23 +5,17 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 )
 
-type visit struct {
-	ip    string
-	alias string
-}
-
 type server struct {
-	db      *store
-	cache   *lru
-	visitCh chan visit
+	db    *store
+	cache *lru
 }
 
 var (
@@ -35,15 +29,12 @@ func newServer(ctx context.Context) *server {
 
 	db, err := newStore(conf.Store)
 	if err != nil {
-		log.Fatalf("cannot establish connection to database, err: %v", err)
+		log.Fatalf("cannot establish connection to database: %v", err)
 	}
-	s := &server{
-		db:      db,
-		cache:   newLRU(true),
-		visitCh: make(chan visit, 100),
+	return &server{
+		db:    db,
+		cache: newLRU(true),
 	}
-	go s.counting(ctx)
-	return s
 }
 
 func (s *server) close() {
@@ -51,55 +42,71 @@ func (s *server) close() {
 }
 
 func (s *server) registerHandler() {
+	l := logging()
+
 	// short redirector
-	http.HandleFunc(conf.S.Prefix, s.shortHandler(kindShort))
-	http.HandleFunc(conf.R.Prefix, s.shortHandler(kindRandom))
+	http.Handle(conf.S.Prefix, l(s.shortHandler(kindShort)))
+	http.Handle(conf.R.Prefix, l(s.shortHandler(kindRandom)))
 	// repo redirector
-	http.Handle(conf.X.Prefix, s.xHandler(conf.X.VCS, conf.X.ImportPath, conf.X.RepoPath))
+	http.Handle(conf.X.Prefix, l(s.xHandler()))
+}
+
+func logging() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				log.Println(readIP(r), r.Method, r.URL.Path)
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// readIP implements a best effort approach to return the real client IP,
+// it parses X-Real-IP and X-Forwarded-For in order to work properly with
+// reverse-proxies such us: nginx or haproxy. Use X-Forwarded-For before
+// X-Real-Ip as nginx uses X-Real-Ip with the proxy's IP.
+//
+// This implementation is derived from gin-gonic/gin.
+func readIP(r *http.Request) string {
+	clientIP := r.Header.Get("X-Forwarded-For")
+	clientIP = strings.TrimSpace(strings.Split(clientIP, ",")[0])
+	if clientIP == "" {
+		clientIP = strings.TrimSpace(r.Header.Get("X-Real-Ip"))
+	}
+	if clientIP != "" {
+		return clientIP
+	}
+	if addr := r.Header.Get("X-Appengine-Remote-Addr"); addr != "" {
+		return addr
+	}
+	ip, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		return "unknown" // use unknown to guarantee non empty string
+	}
+	return ip
 }
 
 // xHandler redirect returns an HTTP handler that redirects requests for
 // the tree rooted at importPath to pkg.go.dev pages for those import paths.
 // The redirections include headers directing `go get.` to satisfy the
-// imports by checking out code from repoPath using the given VCS.
-// As a special case, if both importPath and repoPath end in /*, then
-// the matching element in the importPath is substituted into the repoPath
-// specified for `go get.`
-func (s *server) xHandler(vcs, importPath, repoPath string) http.Handler {
-	wildcard := false
-	if strings.HasSuffix(importPath, "/*") && strings.HasSuffix(repoPath, "/*") {
-		wildcard = true
-		importPath = strings.TrimSuffix(importPath, "/*")
-		repoPath = strings.TrimSuffix(repoPath, "/*")
-	}
-
+// imports by checking out code from repoPath using the configured VCS.
+func (s *server) xHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		importPath := strings.TrimSuffix(req.Host+conf.X.Prefix, "/")
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
-		if wildcard {
-			if path == importPath {
-				http.Redirect(w, req, conf.X.GoDocHost+importPath, http.StatusFound)
-				return
-			}
-			if !strings.HasPrefix(path, importPath+"/") {
-				http.NotFound(w, req)
-				return
-			}
-			elem := path[len(importPath)+1:]
-			if i := strings.Index(elem, "/"); i >= 0 {
-				elem, suffix = elem[:i], elem[i:]
-			}
-			importRoot = importPath + "/" + elem
-			repoRoot = repoPath + "/" + elem
-		} else {
-			if path != importPath && !strings.HasPrefix(path, importPath+"/") {
-				http.NotFound(w, req)
-				return
-			}
-			importRoot = importPath
-			repoRoot = repoPath
-			suffix = path[len(importPath):]
+		if path == importPath {
+			http.Redirect(w, req, conf.X.GoDocHost+importPath, http.StatusFound)
+			return
 		}
+		elem := path[len(importPath)+1:]
+		if i := strings.Index(elem, "/"); i >= 0 {
+			elem, suffix = elem[:i], elem[i:]
+		}
+		importRoot = importPath + "/" + elem
+		repoRoot = conf.X.RepoPath + "/" + elem
+
 		d := &struct {
 			ImportRoot      string
 			VCS             string
@@ -108,18 +115,16 @@ func (s *server) xHandler(vcs, importPath, repoPath string) http.Handler {
 			GoogleAnalytics string
 		}{
 			ImportRoot:      importRoot,
-			VCS:             vcs,
+			VCS:             conf.X.VCS,
 			VCSRoot:         repoRoot,
 			Suffix:          suffix,
 			GoogleAnalytics: conf.GoogleAnalytics,
 		}
-		var buf bytes.Buffer
-		err := xTmpl.Execute(&buf, d)
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		err := xTmpl.Execute(w, d)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		w.Write(buf.Bytes())
 	})
 }

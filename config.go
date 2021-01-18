@@ -40,12 +40,12 @@ func (c *config) parse() {
 		// Just try again with default setting.
 		d, err = os.ReadFile("./config.yml")
 		if err != nil {
-			log.Fatalf("cannot read configuration, err: %v\n", err)
+			log.Fatalf("cannot read configuration: %v\n", err)
 		}
 	}
 	err = yaml.Unmarshal(d, c)
 	if err != nil {
-		log.Fatalf("cannot parse configuration, err: %v\n", err)
+		log.Fatalf("cannot parse configuration: %v\n", err)
 	}
 }
 

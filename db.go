@@ -63,7 +63,7 @@ type store struct {
 func newStore(url string) (*store, error) {
 	opt, err := redis.ParseURL(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create opt store, err: %w", err)
+		return nil, fmt.Errorf("failed to create opt store: %w", err)
 	}
 	return &store{db: redis.NewClient(opt)}, nil
 }
@@ -71,7 +71,7 @@ func newStore(url string) (*store, error) {
 func (s *store) Close() (err error) {
 	err = s.db.Close()
 	if err != nil {
-		err = fmt.Errorf("failed to close data store, err: %w", err)
+		err = fmt.Errorf("failed to close data store: %w", err)
 	}
 	return
 }
@@ -84,12 +84,12 @@ func (s *store) StoreAlias(ctx context.Context, a, l string, kind aliasKind) (er
 		UpdatedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		err = fmt.Errorf("failed to create new alias, err: %w", err)
+		err = fmt.Errorf("failed to create new alias: %w", err)
 		return
 	}
 	ok, err := s.db.SetNX(ctx, prefixalias+a, b, 0).Result()
 	if err != nil {
-		err = fmt.Errorf("failed to store the new record, err: %w", err)
+		err = fmt.Errorf("failed to store the new record: %w", err)
 		return
 	}
 	if !ok {
@@ -105,13 +105,13 @@ func (s *store) UpdateAlias(ctx context.Context, a, l string) (err error) {
 		record := arecord{}
 		err = json.Unmarshal(old, &record)
 		if err != nil {
-			return nil, fmt.Errorf("corrupted data store, err: %w", err)
+			return nil, fmt.Errorf("corrupted data store: %w", err)
 		}
 		record.URL = l
 		record.UpdatedAt = time.Now().UTC()
 		updated, err := json.Marshal(record)
 		if err != nil {
-			return nil, fmt.Errorf("unable to encode data, err: %w", err)
+			return nil, fmt.Errorf("unable to encode data: %w", err)
 		}
 		return updated, nil
 	})
@@ -137,12 +137,12 @@ func (s *store) StoreIP(ctx context.Context, ip, alias string) (err error) {
 		UpdatedAt: now,
 	})
 	if err != nil {
-		err = fmt.Errorf("failed to create new ip, err: %w", err)
+		err = fmt.Errorf("failed to create new ip: %w", err)
 		return
 	}
 	ok, err := s.db.SetNX(ctx, prefixip+ip, b, 0).Result()
 	if err != nil {
-		err = fmt.Errorf("failed to store the new ip, err: %w", err)
+		err = fmt.Errorf("failed to store the new ip: %w", err)
 		return
 	}
 	if !ok {
@@ -161,7 +161,7 @@ func (s *store) UpdateIP(ctx context.Context, ip, alias string) (err error) {
 		record := irecord{}
 		err := json.Unmarshal(old, &record)
 		if err != nil {
-			return nil, fmt.Errorf("corrupted data store, err: %w", err)
+			return nil, fmt.Errorf("corrupted data store: %w", err)
 		}
 
 		now := time.Now().UTC()
@@ -174,7 +174,7 @@ func (s *store) UpdateIP(ctx context.Context, ip, alias string) (err error) {
 
 		updated, err := json.Marshal(record)
 		if err != nil {
-			return nil, fmt.Errorf("unable to encode data, err: %w", err)
+			return nil, fmt.Errorf("unable to encode data: %w", err)
 		}
 		return updated, nil
 	})
@@ -200,7 +200,7 @@ func (s *store) deleteIP(ctx context.Context, ip string) (err error) {
 func (s *store) delete(ctx context.Context, key string) (err error) {
 	_, err = s.db.Del(ctx, key).Result()
 	if err != nil {
-		err = fmt.Errorf("failed to delete the alias, err: %w", err)
+		err = fmt.Errorf("failed to delete the alias: %w", err)
 		return
 	}
 	return
@@ -211,14 +211,14 @@ func (s *store) countVisit(ctx context.Context, alias string, pv, uv int) error 
 		record := arecord{}
 		err := json.Unmarshal(old, &record)
 		if err != nil {
-			return nil, fmt.Errorf("corrupted data store, err: %w", err)
+			return nil, fmt.Errorf("corrupted data store: %w", err)
 		}
 		record.PV += uint64(pv)
 		record.UV += uint64(uv)
 		record.UpdatedAt = time.Now().UTC()
 		updated, err := json.Marshal(record)
 		if err != nil {
-			return nil, fmt.Errorf("unable to encode data, err: %w", err)
+			return nil, fmt.Errorf("unable to encode data: %w", err)
 		}
 		return updated, nil
 	})
@@ -228,7 +228,7 @@ func (s *store) countVisit(ctx context.Context, alias string, pv, uv int) error 
 func (s *store) Fetch(ctx context.Context, key string) (r string, err error) {
 	r, err = s.db.Get(ctx, key).Result()
 	if err != nil {
-		err = fmt.Errorf("failed to read the alias, err: %w", err)
+		err = fmt.Errorf("failed to read the alias: %w", err)
 	}
 	return
 }
@@ -237,7 +237,7 @@ func (s *store) Fetch(ctx context.Context, key string) (r string, err error) {
 func (s *store) Keys(ctx context.Context, prefix string) (r []string, err error) {
 	r, err = s.db.Keys(ctx, prefix).Result()
 	if err != nil {
-		err = fmt.Errorf("failed to read the alias, err: %w", err)
+		err = fmt.Errorf("failed to read the alias: %w", err)
 	}
 	return
 }
@@ -249,12 +249,12 @@ func (s *store) readAndUpdate(ctx context.Context, prefix, key string, updatef f
 	txupdate := func(tx *redis.Tx) error {
 		data, err := tx.Get(ctx, k).Bytes()
 		if err != nil {
-			return fmt.Errorf("readAndUpdate failed in fetch phase, err: %w", err)
+			return fmt.Errorf("readAndUpdate failed in fetch phase: %w", err)
 		}
 
 		updated, err := updatef(data)
 		if err != nil {
-			return fmt.Errorf("readAndUpdate failed in update phase, err: %w", err)
+			return fmt.Errorf("readAndUpdate failed in update phase: %w", err)
 		}
 
 		// Commited only if watched key remain unchanged

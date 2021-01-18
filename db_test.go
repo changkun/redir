@@ -22,12 +22,12 @@ func prepare(ctx context.Context, t *testing.T) *store {
 
 	err = s.StoreAlias(ctx, kalias, "link", kindShort)
 	if err != nil {
-		t.Fatalf("cannot store alias to data store, err: %v\n", err)
+		t.Fatalf("cannot store alias to data store: %v\n", err)
 	}
 	t.Cleanup(func() {
 		err := s.DeleteAlias(ctx, kalias)
 		if err != nil {
-			t.Fatalf("DeleteAlias failure, err: %v", err)
+			t.Fatalf("DeleteAlias failure: %v", err)
 		}
 		s.Close()
 	})
@@ -45,11 +45,11 @@ func check(ctx context.Context, t *testing.T, s *store, key string, rr interface
 		r, err = s.FetchIP(ctx, strings.TrimPrefix(key, prefixip))
 	}
 	if err != nil {
-		t.Fatalf("Fetch failure, err: %v\n", err)
+		t.Fatalf("Fetch failure: %v\n", err)
 	}
 	err = json.Unmarshal(str2b(r), rr)
 	if err != nil {
-		t.Fatalf("Unmarshal failure, err: %v\n", err)
+		t.Fatalf("Unmarshal failure: %v\n", err)
 	}
 }
 
@@ -82,12 +82,12 @@ func TestUpdateIP(t *testing.T) {
 
 	err := s.StoreIP(ctx, ip, kalias)
 	if err != nil {
-		t.Fatalf("Cannot store IP for visiting kalias, err: %v", err)
+		t.Fatalf("Cannot store IP for visiting kalias: %v", err)
 	}
 
 	err = s.UpdateIP(ctx, ip, kalias)
 	if err != nil {
-		t.Fatalf("Cannot update IP for visiting kalias, err: %v", err)
+		t.Fatalf("Cannot update IP for visiting kalias: %v", err)
 	}
 
 	r := irecord{}
@@ -125,7 +125,7 @@ func TestAtomicUpdate(t *testing.T) {
 			defer wg.Done()
 			err := s.countVisit(ctx, "alias", 1, 1)
 			if err != nil {
-				t.Errorf("countVisit failure, err: %v\n", err)
+				t.Errorf("countVisit failure: %v\n", err)
 				return
 			}
 		}()

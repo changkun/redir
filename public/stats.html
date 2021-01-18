@@ -65,7 +65,7 @@
 <body>
 <div id="app" class="bg-dark">
   <h1>changkun.de</h1>
-  <h5><a href="https://changkun.de/s/redir">Request redirector</a></h5>
+  <h5><a href="https://changkun.de/s/redir">URL Shortner/Redirector</a></h5>
   <table class="table table-striped table-dark" style="width:100%">
     <tr>
       <th>PV/UV</th>
@@ -74,7 +74,7 @@
     {{range .Records}}
     <tr>
       <td>{{ .PV }}/{{ .UV }}</td>
-      <td><a href="{{ $.Host }}{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a></td>
+      <td><a href="{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a></td>
     </tr>
     {{end}}
   </table>
