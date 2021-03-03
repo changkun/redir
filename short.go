@@ -1,4 +1,4 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -16,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"gopkg.in/yaml.v3"
 )
 
@@ -86,7 +84,7 @@ func importFile(fname string) {
 
 // shortCmd processes the given alias and link with a specified op.
 func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
-	s, err := newStore(conf.Store)
+	s, err := newDB(conf.Store)
 	if err != nil {
 		err = fmt.Errorf("cannot create a new alias: %w", err)
 		return
@@ -111,7 +109,12 @@ func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 			alias = randstr(conf.R.Length)
 			kind = kindRandom
 		}
-		err = s.StoreAlias(ctx, alias, link, kind)
+		err = s.StoreAlias(ctx, &redirect{
+			Alias:   alias,
+			Kind:    kind,
+			URL:     link,
+			Private: false,
+		})
 		if err != nil {
 			return
 		}
@@ -126,7 +129,7 @@ func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 		}
 		fmt.Printf("%s%s%s\n", conf.Host, prefix, alias)
 	case opUpdate:
-		err = s.UpdateAlias(ctx, alias, link)
+		_, err = s.UpdateAlias(ctx, alias, link)
 		if err != nil {
 			return
 		}
@@ -138,12 +141,12 @@ func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 		}
 		log.Printf("alias %v has been deleted.\n", alias)
 	case opFetch:
-		var r string
+		var r *redirect
 		r, err = s.FetchAlias(ctx, alias)
 		if err != nil {
 			return
 		}
-		log.Println(r)
+		log.Println(r.URL)
 	}
 	return
 }
@@ -202,37 +205,27 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 			defer cancel()
 
 			ip := readIP(r)
-			_, err := s.db.FetchIP(context.Background(), ip)
-			if errors.Is(err, redis.Nil) {
-				err = s.db.StoreIP(ctx, ip, alias) // new ip
-				if err != nil {
-					log.Printf("failt to store ip: %v", err)
-				}
-			} else if err != nil {
-				log.Printf("cannot fetch data store for ip processing: %v\n", err)
-			} else {
-				err = s.db.UpdateIP(ctx, ip, alias) // old ip
-				if err != nil {
-					log.Printf("failt to update ip: %v", err)
-				}
+			err := s.db.RecordVisit(ctx, &visit{
+				Alias:   alias,
+				IP:      ip,
+				UA:      r.UserAgent(),
+				Referer: r.Referer(),
+				Time:    time.Now().UTC(),
+			})
+			if err != nil {
+				log.Printf("cannot record %s visit: %v", alias, err)
 			}
 		}()
 	})
 }
 
-// checkdb checks whether the given alias is exsited in the redir database,
-// and updates the in-memory cache if
+// checkdb checks whether the given alias is exsited in the redir database
 func (s *server) checkdb(ctx context.Context, alias string) (string, error) {
-	raw, err := s.db.FetchAlias(ctx, alias)
+	a, err := s.db.FetchAlias(ctx, alias)
 	if err != nil {
 		return "", err
 	}
-	c := arecord{}
-	err = json.Unmarshal(str2b(raw), &c)
-	if err != nil {
-		return "", err
-	}
-	return c.URL, nil
+	return a.URL, nil
 }
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
@@ -261,7 +254,12 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	}
 
 	// store such a try path
-	err = s.db.StoreAlias(ctx, alias, tryPath, kindShort)
+	err = s.db.StoreAlias(ctx, &redirect{
+		Alias:   alias,
+		Kind:    kindShort,
+		URL:     tryPath,
+		Private: false,
+	})
 	if err != nil {
 		if errors.Is(err, errExistedAlias) {
 			return s.checkdb(ctx, alias)
@@ -272,16 +270,23 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	return tryPath, nil
 }
 
-type arecords struct {
+type records struct {
 	Title           string
 	Host            string
 	Prefix          string
-	Records         []arecord
+	Records         []record
 	GoogleAnalytics string
 }
 
+type record struct {
+	Alias string
+	URL   string
+	UV    int64
+	PV    int64
+}
+
 func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) (retErr error) {
-	aliases, retErr := s.db.Keys(ctx, prefixalias+"*")
+	redirects, retErr := s.db.Aliases(ctx, kind)
 	if retErr != nil {
 		return
 	}
@@ -294,30 +299,25 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		prefix = conf.R.Prefix
 	}
 
-	ars := arecords{
+	ars := records{
 		Title:           conf.Title,
 		Host:            r.Host,
 		Prefix:          prefix,
-		Records:         []arecord{},
+		Records:         []record{},
 		GoogleAnalytics: conf.GoogleAnalytics,
 	}
-	for _, a := range aliases {
-		raw, err := s.db.Fetch(ctx, a)
+	for _, r := range redirects {
+		pv, uv, err := s.db.CountVisit(ctx, r.Alias)
 		if err != nil {
 			retErr = err
 			return
 		}
-		var record arecord
-		err = json.Unmarshal(str2b(raw), &record)
-		if err != nil {
-			retErr = err
-			return
-		}
-		if record.Kind != kind {
-			continue
-		}
-
-		ars.Records = append(ars.Records, record)
+		ars.Records = append(ars.Records, record{
+			Alias: r.Alias,
+			URL:   r.URL,
+			PV:    pv,
+			UV:    uv,
+		})
 	}
 
 	sort.Slice(ars.Records, func(i, j int) bool {

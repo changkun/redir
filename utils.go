@@ -1,4 +1,4 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
@@ -8,21 +8,7 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-	"unsafe"
 )
-
-// b2str converts byte slice to string.
-func b2str(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-// str2b converts string to byte slice.
-func str2b(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&struct {
-		string
-		Cap int
-	}{s, len(s)}))
-}
 
 const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 

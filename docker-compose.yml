@@ -10,19 +10,19 @@ services:
     environment:
       REDIR_CONF: ./data/redirconf.yml
     depends_on:
-      - redis
+      - mongo
     deploy:
-      replicas: 3
+      replicas: 1
     networks:
       - traefik_proxy
-  redis:
-    container_name: redis
-    restart: always
-    volumes:
-      - ./data/redis:/data
-    image: redis:6.0
+  mongo:
+    container_name: redirdb
+    image: mongo:latest
     ports:
-      - "6379:6379"
+      - "27017:27017"
+    volumes:
+      - ./data/mongo:/data/db
+    restart: always
     networks:
       - traefik_proxy
 networks:

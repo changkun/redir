@@ -1,4 +1,4 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
@@ -14,7 +14,7 @@ import (
 )
 
 type server struct {
-	db    *store
+	db    *database
 	cache *lru
 }
 
@@ -27,7 +27,7 @@ func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.ParseFiles("public/x.html"))
 	statsTmpl = template.Must(template.ParseFiles("public/stats.html"))
 
-	db, err := newStore(conf.Store)
+	db, err := newDB(conf.Store)
 	if err != nil {
 		log.Fatalf("cannot establish connection to database: %v", err)
 	}

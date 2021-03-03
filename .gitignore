@@ -11,3 +11,6 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 redir
+migrate/dump/ips
+migrate/dump/alias
+data/mongo
