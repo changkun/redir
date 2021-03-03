@@ -55,10 +55,7 @@ type database struct {
 
 func newDB(uri string) (*database, error) {
 	// initialize database connection
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	db, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	db, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}
