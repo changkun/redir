@@ -5,6 +5,7 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 	"os"
 
@@ -33,13 +34,16 @@ type config struct {
 	GoogleAnalytics string `yaml:"google_analytics"`
 }
 
+//go:embed config.yml
+var defaultConf []byte
+
 func (c *config) parse() {
 	f := os.Getenv("REDIR_CONF")
 	d, err := os.ReadFile(f)
 	if err != nil {
 		// Just try again with default setting.
-		d, err = os.ReadFile("./config.yml")
-		if err != nil {
+		d = defaultConf
+		if d == nil {
 			log.Fatalf("cannot read configuration: %v\n", err)
 		}
 	}
