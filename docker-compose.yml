@@ -19,7 +19,7 @@ services:
     container_name: redirdb
     image: mongo:latest
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - ./data/mongo:/data/db
     restart: always

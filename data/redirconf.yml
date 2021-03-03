@@ -5,7 +5,7 @@
 title: "Changkun Ou | changkun.de"
 host: https://changkun.de
 addr: redir:80
-store: mongodb://redirdb:27017
+store: mongodb://redirdb:27018
 s:
   prefix: /s/
 r:

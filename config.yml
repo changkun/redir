@@ -5,7 +5,7 @@
 title: "Changkun Ou | changkun.de"
 host: https://changkun.de
 addr: :9123
-store: mongodb://localhost:27017
+store: mongodb://localhost:27018
 s:
   prefix: /s/
 r:
