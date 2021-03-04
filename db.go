@@ -131,29 +131,6 @@ func (db *database) FetchAlias(ctx context.Context, a string) (*redirect, error)
 	return &r, nil
 }
 
-func (db *database) Aliases(ctx context.Context, kind aliasKind) (map[string]string, error) {
-	col := db.cli.Database(dbname).Collection(collink)
-
-	var all []redirect
-
-	cur, err := col.Find(ctx, bson.D{{"kind", kind}})
-	if err != nil {
-		return nil, fmt.Errorf("failed to find aliases: %w", err)
-	}
-	defer cur.Close(ctx)
-
-	if err := cur.All(ctx, &all); err != nil {
-		return nil, fmt.Errorf("failed to iterate all records: %w", err)
-	}
-
-	ret := map[string]string{}
-	for _, r := range all {
-		ret[r.Alias] = r.URL
-	}
-
-	return ret, nil
-}
-
 func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 	col := db.cli.Database(dbname).Collection(colvisit)
 
@@ -172,32 +149,54 @@ func (db *database) CountVisit(ctx context.Context) (rs []record, err error) {
 	// raw query:
 	//
 	// db.getCollection('visit').aggregate([
+	// 	{"$lookup": {from: "links", localField: "alias", foreignField: "alias", as: "url"}},
+	// 	{"$unwind": "$url"},
 	// 	{"$group": {
-	// 		_id: {alias: "$alias", ip:"$ip"},
+	// 		_id: {alias: "$alias", ip:"$ip", url: "$url.url"},
 	// 		count: {"$sum": 1}}
 	// 	},
 	// 	{"$group": {
-	// 		_id: "$_id.alias",
-	// 		uv: {$sum: 1},
-	// 		pv: {$sum: "$count"}}
+	// 		_id:   "$_id.alias",
+	// 		alias: {$first: "$_id.alias"},
+	// 		url:   {$first: "$_id.url"},
+	// 		pv:    {$sum: 1},
+	// 		uv:    {$sum: "$count"}}
 	// 	},
 	// 	{ $sort : { pv : -1 } },
-	// 	{ $sort : { uv : -1 } }])
+	// 	{ $sort : { uv : -1 } }
+	// 	])
 
 	col := db.cli.Database(dbname).Collection(colvisit)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
 		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         collink,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "url",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: "$url"},
+		},
+		bson.D{
 			primitive.E{Key: "$group", Value: bson.M{
-				"_id":   bson.M{"alias": "$alias", "ip": "$ip"},
+				"_id": bson.M{
+					"alias": "$alias",
+					"ip":    "$ip",
+					"url":   "$url.url",
+				},
 				"count": bson.M{"$sum": 1},
 			}},
 		},
 		bson.D{
 			primitive.E{Key: "$group", Value: bson.M{
-				"_id": "$_id.alias",
-				"uv":  bson.M{"$sum": 1},
-				"pv":  bson.M{"$sum": "$count"},
+				"_id":   "$_id.alias",
+				"alias": bson.M{"$first": "$_id.alias"},
+				"url":   bson.M{"$first": "$_id.url"},
+				"uv":    bson.M{"$sum": 1},
+				"pv":    bson.M{"$sum": "$count"},
 			}},
 		},
 		bson.D{
