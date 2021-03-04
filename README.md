@@ -1,17 +1,8 @@
-# redir
+# redir [![PkgGoDev](https://pkg.go.dev/badge/changkun.de/x/redir)](https://pkg.go.dev/changkun.de/x/redir) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
 
 The request redirector for changkun.de.
 
-## Usage
-
-Deploy:
-
-```
-$ docker network create traefik_proxy
-$ make build && make up
-```
-
-CLI:
+## CLI Usage
 
 ```
 redir -a changkun -l https://changkun.de
@@ -31,4 +22,4 @@ echo "export GOPRIVATE=changkun.de/x" >> ~/.zshrc
 
 ## License
 
-MIT &copy; 2020 [Changkun Ou](https://changkun.de)
+MIT &copy; 2020-2021 [Changkun Ou](https://changkun.de)
