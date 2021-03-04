@@ -278,8 +278,8 @@ type records struct {
 }
 
 type record struct {
-	Alias string `bson:"alias"`
-	URL   string `bson:"url"`
+	Alias string `bson:"_id"`
+	URL   string `bson:"-"`
 	UV    int64  `bson:"uv"`
 	PV    int64  `bson:"pv"`
 }
@@ -292,6 +292,7 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 	case kindRandom:
 		prefix = conf.R.Prefix
 	}
+
 	ars := records{
 		Title:           conf.Title,
 		Host:            r.Host,
@@ -303,6 +304,14 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 	if err != nil {
 		return err
 	}
+	as, err := s.db.Aliases(ctx, kind)
+	if err != nil {
+		return err
+	}
+	for idx := range rs {
+		rs[idx].URL = as[rs[idx].Alias]
+	}
 	ars.Records = rs
+
 	return statsTmpl.Execute(w, ars)
 }
