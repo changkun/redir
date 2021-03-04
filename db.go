@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -130,10 +131,10 @@ func (db *database) FetchAlias(ctx context.Context, a string) (*redirect, error)
 	return &r, nil
 }
 
-func (db *database) Aliases(ctx context.Context, kind aliasKind) ([]*redirect, error) {
+func (db *database) Aliases(ctx context.Context, kind aliasKind) (map[string]string, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	r := []*redirect{}
+	var all []redirect
 
 	cur, err := col.Find(ctx, bson.D{{"kind", kind}})
 	if err != nil {
@@ -141,18 +142,16 @@ func (db *database) Aliases(ctx context.Context, kind aliasKind) ([]*redirect, e
 	}
 	defer cur.Close(ctx)
 
-	for cur.Next(ctx) {
-		var result redirect
-		err := cur.Decode(&result)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode result: %w", err)
-		}
-		r = append(r, &result)
-	}
-	if err := cur.Err(); err != nil {
+	if err := cur.All(ctx, &all); err != nil {
 		return nil, fmt.Errorf("failed to iterate all records: %w", err)
 	}
-	return r, nil
+
+	ret := map[string]string{}
+	for _, r := range all {
+		ret[r.Alias] = r.URL
+	}
+
+	return ret, nil
 }
 
 func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
@@ -167,23 +166,56 @@ func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 }
 
 // CountVisit stores a given new visit record
-func (db *database) CountVisit(ctx context.Context, alias string) (pv, uv int64, err error) {
-	col := db.cli.Database(dbname).Collection(colvisit)
-
-	pv, err = col.CountDocuments(ctx, bson.M{"alias": alias})
-	if err != nil {
-		return
-	}
-
+func (db *database) CountVisit(ctx context.Context) (rs []record, err error) {
 	// uv based on number of ip, this is not accurate since the number will be
 	// smaller than the actual.
+	// raw query:
+	//
+	// db.getCollection('visit').aggregate([
+	// 	{"$group": {
+	// 		_id: {alias: "$alias", ip:"$ip"},
+	// 		count: {"$sum": 1}}
+	// 	},
+	// 	{"$group": {
+	// 		_id: "$_id.alias",
+	// 		uv: {$sum: 1},
+	// 		pv: {$sum: "$count"}}
+	// 	},
+	// 	{ $sort : { pv : -1 } },
+	// 	{ $sort : { uv : -1 } }])
 
-	result, err := col.Distinct(ctx, "ip", bson.D{
-		{Key: "alias", Value: bson.D{{Key: "$eq", Value: alias}}},
-	})
+	col := db.cli.Database(dbname).Collection(colvisit)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id":   bson.M{"alias": "$alias", "ip": "$ip"},
+				"count": bson.M{"$sum": 1},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id": "$_id.alias",
+				"uv":  bson.M{"$sum": 1},
+				"pv":  bson.M{"$sum": "$count"},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"pv": -1}},
+		},
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"uv": -1}},
+		},
+	}, opts)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to count visit: %w", err)
 	}
-	uv = int64(len(result))
-	return
+	defer cur.Close(ctx)
+
+	var results []record
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch visit results: %w", err)
+	}
+
+	return results, nil
 }

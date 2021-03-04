@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -279,18 +278,13 @@ type records struct {
 }
 
 type record struct {
-	Alias string
-	URL   string
-	UV    int64
-	PV    int64
+	Alias string `bson:"_id"`
+	URL   string `bson:"-"`
+	UV    int64  `bson:"uv"`
+	PV    int64  `bson:"pv"`
 }
 
-func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) (retErr error) {
-	redirects, retErr := s.db.Aliases(ctx, kind)
-	if retErr != nil {
-		return
-	}
-
+func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
 	var prefix string
 	switch kind {
 	case kindShort:
@@ -303,33 +297,21 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		Title:           conf.Title,
 		Host:            r.Host,
 		Prefix:          prefix,
-		Records:         []record{},
+		Records:         nil,
 		GoogleAnalytics: conf.GoogleAnalytics,
 	}
-	for _, r := range redirects {
-		pv, uv, err := s.db.CountVisit(ctx, r.Alias)
-		if err != nil {
-			retErr = err
-			return
-		}
-		ars.Records = append(ars.Records, record{
-			Alias: r.Alias,
-			URL:   r.URL,
-			PV:    pv,
-			UV:    uv,
-		})
+	rs, err := s.db.CountVisit(ctx)
+	if err != nil {
+		return err
 	}
-
-	sort.Slice(ars.Records, func(i, j int) bool {
-		if ars.Records[i].PV > ars.Records[j].PV {
-			return true
-		}
-		return ars.Records[i].UV > ars.Records[j].UV
-	})
-
-	retErr = statsTmpl.Execute(w, ars)
-	if retErr != nil {
-		return
+	as, err := s.db.Aliases(ctx, kind)
+	if err != nil {
+		return err
 	}
-	return
+	for idx := range rs {
+		rs[idx].URL = as[rs[idx].Alias]
+	}
+	ars.Records = rs
+
+	return statsTmpl.Execute(w, ars)
 }
