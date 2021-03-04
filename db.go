@@ -80,9 +80,9 @@ func (db *database) StoreAlias(ctx context.Context, r *redirect) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	opts := options.Update().SetUpsert(true)
-	filter := bson.D{{"alias", r.Alias}, {"kind", r.Kind}}
+	filter := bson.M{"alias": r.Alias, "kind": r.Kind}
 
-	_, err = col.UpdateOne(ctx, filter, bson.D{{"$set", r}}, opts)
+	_, err = col.UpdateOne(ctx, filter, bson.M{"$set": r}, opts)
 	if err != nil {
 		err = fmt.Errorf("failed to insert given redirect: %w", err)
 		return
@@ -94,11 +94,11 @@ func (db *database) StoreAlias(ctx context.Context, r *redirect) (err error) {
 func (db *database) UpdateAlias(ctx context.Context, a, l string) (*redirect, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	filter := bson.D{{"alias", a}}
-	update := bson.D{{"$set", bson.D{{"url", l}}}}
-
 	var r redirect
-	err := col.FindOneAndUpdate(ctx, filter, update).Decode(&r)
+	err := col.FindOneAndUpdate(ctx,
+		bson.M{"alias": a},
+		bson.M{"$set": bson.M{"url": l}},
+	).Decode(&r)
 	if err != nil {
 		err = fmt.Errorf("failed to update alias %s: %v", a, err)
 		return nil, err
@@ -111,7 +111,7 @@ func (db *database) UpdateAlias(ctx context.Context, a, l string) (*redirect, er
 func (db *database) DeleteAlias(ctx context.Context, a string) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	_, err = col.DeleteMany(ctx, bson.D{{"alias", a}})
+	_, err = col.DeleteMany(ctx, bson.M{"alias": a})
 	if err != nil {
 		err = fmt.Errorf("delete alias %s failed: %w", a, err)
 		return
@@ -124,34 +124,11 @@ func (db *database) FetchAlias(ctx context.Context, a string) (*redirect, error)
 	col := db.cli.Database(dbname).Collection(collink)
 
 	var r redirect
-	err := col.FindOne(ctx, bson.D{{"alias", a}}).Decode(&r)
+	err := col.FindOne(ctx, bson.M{"alias": a}).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find alias %s: %v", a, err)
 	}
 	return &r, nil
-}
-
-func (db *database) Aliases(ctx context.Context, kind aliasKind) (map[string]string, error) {
-	col := db.cli.Database(dbname).Collection(collink)
-
-	var all []redirect
-
-	cur, err := col.Find(ctx, bson.D{{"kind", kind}})
-	if err != nil {
-		return nil, fmt.Errorf("failed to find aliases: %w", err)
-	}
-	defer cur.Close(ctx)
-
-	if err := cur.All(ctx, &all); err != nil {
-		return nil, fmt.Errorf("failed to iterate all records: %w", err)
-	}
-
-	ret := map[string]string{}
-	for _, r := range all {
-		ret[r.Alias] = r.URL
-	}
-
-	return ret, nil
 }
 
 func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
@@ -163,6 +140,12 @@ func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 		return
 	}
 	return
+}
+
+type record struct {
+	Alias string `bson:"alias"`
+	UV    int64  `bson:"uv"`
+	PV    int64  `bson:"pv"`
 }
 
 // CountVisit stores a given new visit record
@@ -195,9 +178,10 @@ func (db *database) CountVisit(ctx context.Context) (rs []record, err error) {
 		},
 		bson.D{
 			primitive.E{Key: "$group", Value: bson.M{
-				"_id": "$_id.alias",
-				"uv":  bson.M{"$sum": 1},
-				"pv":  bson.M{"$sum": "$count"},
+				"_id":   "$_id.alias",
+				"alias": bson.M{"$first": "$_id.alias"},
+				"uv":    bson.M{"$sum": 1},
+				"pv":    bson.M{"$sum": "$count"},
 			}},
 		},
 		bson.D{

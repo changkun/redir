@@ -277,13 +277,6 @@ type records struct {
 	GoogleAnalytics string
 }
 
-type record struct {
-	Alias string `bson:"_id"`
-	URL   string `bson:"-"`
-	UV    int64  `bson:"uv"`
-	PV    int64  `bson:"pv"`
-}
-
 func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
 	var prefix string
 	switch kind {
@@ -303,13 +296,6 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 	rs, err := s.db.CountVisit(ctx)
 	if err != nil {
 		return err
-	}
-	as, err := s.db.Aliases(ctx, kind)
-	if err != nil {
-		return err
-	}
-	for idx := range rs {
-		rs[idx].URL = as[rs[idx].Alias]
 	}
 	ars.Records = rs
 
