@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -279,6 +280,10 @@ type records struct {
 }
 
 func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
+	if len(r.URL.Query()) != 0 {
+		return s.statData(ctx, w, r, kind)
+	}
+
 	var prefix string
 	switch kind {
 	case kindShort:
@@ -301,4 +306,50 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 	ars.Records = rs
 
 	return statsTmpl.Execute(w, ars)
+}
+
+func (s *server) statData(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	k aliasKind,
+) error {
+	params := r.URL.Query()
+	a := params.Get("a")
+	if a == "" {
+		return errors.New("alias is not provided")
+	}
+
+	mode := params.Get("stat")
+	if mode == "" {
+		return errors.New("stat mode is not provided")
+	}
+	w.Header().Add("Content-Type", "application/json")
+
+	switch mode {
+	case "referer":
+		referers, err := s.db.CountReferer(ctx, a, k)
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(referers)
+		if err != nil {
+			return err
+		}
+		w.Write(b)
+		return err
+	case "ua":
+		referers, err := s.db.CountUA(ctx, a, k)
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(referers)
+		if err != nil {
+			return err
+		}
+		w.Write(b)
+		return err
+	default:
+		return fmt.Errorf("%s stat mode is not supported", mode)
+	}
 }

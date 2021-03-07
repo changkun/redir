@@ -132,6 +132,160 @@ func (db *database) FetchAlias(ctx context.Context, a string) (*redirect, error)
 	return &r, nil
 }
 
+type refstat struct {
+	Referer string `json:"referer" bson:"referer"`
+	Count   int64  `json:"count"   bson:"count"`
+}
+
+// CountReferer fetches and counts all referers of a given alias
+func (db *database) CountReferer(ctx context.Context, a string, k aliasKind) ([]refstat, error) {
+	// db.links.aggregate([
+	// 	{$match: {kind: 0, alias: 'blog'}},
+	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
+	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
+	// 	{$group: {_id: {'$cond':{'if': {'$eq': ['', '$visit.referer']},
+	// 		 'then': 'unknown', 'else': '$visit.referer'}},
+	// 		'referer': {'$first': {'$cond':{'if': {'$eq': ['', '$visit.referer']},
+	// 		 'then': 'unknown', 'else': '$visit.referer'}}}, count: {$sum: 1}}},
+	// 	{$sort : {count: -1}},
+	// ])
+	col := db.cli.Database(dbname).Collection(collink)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{
+			primitive.E{Key: "$match", Value: bson.M{
+				"kind": k, "alias": a,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: bson.M{
+				"path":                       "$visit",
+				"preserveNullAndEmptyArrays": true,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{"", "$visit.referer"},
+						},
+						"then": "unknown",
+						"else": "$visit.referer",
+					},
+				},
+				"referer": bson.M{"$first": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{"", "$visit.referer"},
+						},
+						"then": "unknown",
+						"else": "$visit.referer",
+					},
+				}},
+				"count": bson.M{"$sum": 1},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"count": -1}},
+		},
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count referer: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []refstat
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch referer results: %w", err)
+	}
+
+	return results, nil
+}
+
+type uastat struct {
+	UA    string `json:"ua"    bson:"ua"`
+	Count int64  `json:"count" bson:"count"`
+}
+
+func (db *database) CountUA(ctx context.Context, a string, k aliasKind) ([]uastat, error) {
+	// db.links.aggregate([
+	// 	{$match: {kind: 0, alias: 'blog'}},
+	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
+	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
+	// 	{$group: {_id: {'$cond': {'if': {'$eq': ['', '$visit.ua']}, 'then': 'unknown', 'else': '$visit.ua'}}, 'ua': {'$first': '$visit.ua'}, count: {$sum: 1}}},
+	// 	{$sort : {count: -1}},
+	// ])
+	col := db.cli.Database(dbname).Collection(collink)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{
+			primitive.E{Key: "$match", Value: bson.M{
+				"kind": k, "alias": a,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: bson.M{
+				"path":                       "$visit",
+				"preserveNullAndEmptyArrays": true,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{"", "$visit.ua"},
+						},
+						"then": "unknown",
+						"else": "$visit.ua",
+					},
+				},
+				"ua": bson.M{"$first": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{"", "$visit.ua"},
+						},
+						"then": "unknown",
+						"else": "$visit.ua",
+					},
+				}},
+				"count": bson.M{"$sum": 1},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"count": -1}},
+		},
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count ua: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []uastat
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch ua results: %w", err)
+	}
+
+	return results, nil
+}
+
 func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 	col := db.cli.Database(dbname).Collection(colvisit)
 
