@@ -206,6 +206,7 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 			ip := readIP(r)
 			err := s.db.RecordVisit(ctx, &visit{
 				Alias:   alias,
+				Kind:    kind,
 				IP:      ip,
 				UA:      r.UserAgent(),
 				Referer: r.Referer(),
@@ -293,7 +294,7 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		Records:         nil,
 		GoogleAnalytics: conf.GoogleAnalytics,
 	}
-	rs, err := s.db.CountVisit(ctx)
+	rs, err := s.db.CountVisit(ctx, kind)
 	if err != nil {
 		return err
 	}

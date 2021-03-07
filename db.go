@@ -38,6 +38,7 @@ type redirect struct {
 // visit indicates an record of visit pattern.
 type visit struct {
 	Alias   string    `json:"alias"   bson:"alias"`
+	Kind    aliasKind `json:"kind"    bson:"kind"`
 	IP      string    `json:"ip"      bson:"ip"`
 	UA      string    `json:"ua"      bson:"ua"`
 	Referer string    `json:"referer" bson:"referer"`
@@ -148,31 +149,46 @@ type record struct {
 	PV    int64  `bson:"pv"`
 }
 
-// CountVisit stores a given new visit record
-func (db *database) CountVisit(ctx context.Context) (rs []record, err error) {
+// CountVisit counts the PV/UV of aliases of a given kind
+func (db *database) CountVisit(ctx context.Context, kind aliasKind) (rs []record, err error) {
 	// uv based on number of ip, this is not accurate since the number will be
 	// smaller than the actual.
 	// raw query:
 	//
-	// db.getCollection('visit').aggregate([
-	// 	{"$group": {
-	// 		_id: {alias: "$alias", ip:"$ip"},
-	// 		count: {"$sum": 1}}
-	// 	},
-	// 	{"$group": {
-	// 		_id: "$_id.alias",
-	// 		uv: {$sum: 1},
-	// 		pv: {$sum: "$count"}}
-	// 	},
-	// 	{ $sort : { pv : -1 } },
-	// 	{ $sort : { uv : -1 } }])
-
-	col := db.cli.Database(dbname).Collection(colvisit)
+	// db.links.aggregate([
+	// 	{$match: {kind: 0}},
+	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
+	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
+	// 	{$group: {_id: {alias: '$alias', ip: '$visit.ip'}, count: {$sum: 1}}},
+	// 	{$group: {_id: '$_id.alias', uv: {$sum: 1}, pv: {$sum: '$count'}}},
+	// 	{$sort : {pv: -1}},
+	// 	{$sort : {uv: -1}},
+	// ])
+	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
 		bson.D{
+			primitive.E{Key: "$match", Value: bson.M{
+				"kind": kind,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: bson.M{
+				"path":                       "$visit",
+				"preserveNullAndEmptyArrays": true,
+			}},
+		},
+		bson.D{
 			primitive.E{Key: "$group", Value: bson.M{
-				"_id":   bson.M{"alias": "$alias", "ip": "$ip"},
+				"_id":   bson.M{"alias": "$alias", "ip": "$visit.ip"},
 				"count": bson.M{"$sum": 1},
 			}},
 		},
