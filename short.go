@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -324,11 +325,17 @@ func (s *server) statData(
 	if mode == "" {
 		return errors.New("stat mode is not provided")
 	}
+
+	start, end, err := parseDuration(params)
+	if err != nil {
+		return err
+	}
+
 	w.Header().Add("Content-Type", "application/json")
 
 	switch mode {
 	case "referer":
-		referers, err := s.db.CountReferer(ctx, a, k)
+		referers, err := s.db.CountReferer(ctx, a, k, start, end)
 		if err != nil {
 			return err
 		}
@@ -339,7 +346,7 @@ func (s *server) statData(
 		w.Write(b)
 		return err
 	case "ua":
-		referers, err := s.db.CountUA(ctx, a, k)
+		referers, err := s.db.CountUA(ctx, a, k, start, end)
 		if err != nil {
 			return err
 		}
@@ -352,4 +359,26 @@ func (s *server) statData(
 	default:
 		return fmt.Errorf("%s stat mode is not supported", mode)
 	}
+}
+
+func parseDuration(p url.Values) (start, end time.Time, err error) {
+	t0 := p.Get("t0")
+	if t0 != "" {
+		start, err = time.Parse("2006-01-02", t0)
+		if err != nil {
+			return
+		}
+	} else {
+		start = time.Now().UTC().Add(-time.Hour * 24 * 7) // last week
+	}
+	t1 := p.Get("t1")
+	if t1 != "" {
+		end, err = time.Parse("2006-01-02", t1)
+		if err != nil {
+			return
+		}
+	} else {
+		end = time.Now().UTC()
+	}
+	return
 }

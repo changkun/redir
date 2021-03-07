@@ -138,17 +138,7 @@ type refstat struct {
 }
 
 // CountReferer fetches and counts all referers of a given alias
-func (db *database) CountReferer(ctx context.Context, a string, k aliasKind) ([]refstat, error) {
-	// db.links.aggregate([
-	// 	{$match: {kind: 0, alias: 'blog'}},
-	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
-	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
-	// 	{$group: {_id: {'$cond':{'if': {'$eq': ['', '$visit.referer']},
-	// 		 'then': 'unknown', 'else': '$visit.referer'}},
-	// 		'referer': {'$first': {'$cond':{'if': {'$eq': ['', '$visit.referer']},
-	// 		 'then': 'unknown', 'else': '$visit.referer'}}}, count: {$sum: 1}}},
-	// 	{$sort : {count: -1}},
-	// ])
+func (db *database) CountReferer(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]refstat, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
@@ -159,10 +149,19 @@ func (db *database) CountReferer(ctx context.Context, a string, k aliasKind) ([]
 		},
 		bson.D{
 			primitive.E{Key: "$lookup", Value: bson.M{
-				"from":         colvisit,
-				"localField":   "alias",
-				"foreignField": "alias",
-				"as":           "visit",
+				"from": colvisit,
+				"as":   "visit",
+				"pipeline": mongo.Pipeline{bson.D{
+					primitive.E{Key: "$match", Value: bson.M{
+						"$expr": bson.M{
+							"$and": []bson.M{
+								{"$eq": []string{a, "$alias"}},
+								{"$gte": []interface{}{"$time", start}},
+								{"$lt": []interface{}{"$time", end}},
+							},
+						},
+					}},
+				}},
 			}},
 		},
 		bson.D{
@@ -216,14 +215,7 @@ type uastat struct {
 	Count int64  `json:"count" bson:"count"`
 }
 
-func (db *database) CountUA(ctx context.Context, a string, k aliasKind) ([]uastat, error) {
-	// db.links.aggregate([
-	// 	{$match: {kind: 0, alias: 'blog'}},
-	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
-	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
-	// 	{$group: {_id: {'$cond': {'if': {'$eq': ['', '$visit.ua']}, 'then': 'unknown', 'else': '$visit.ua'}}, 'ua': {'$first': '$visit.ua'}, count: {$sum: 1}}},
-	// 	{$sort : {count: -1}},
-	// ])
+func (db *database) CountUA(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]uastat, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
@@ -234,10 +226,19 @@ func (db *database) CountUA(ctx context.Context, a string, k aliasKind) ([]uasta
 		},
 		bson.D{
 			primitive.E{Key: "$lookup", Value: bson.M{
-				"from":         colvisit,
-				"localField":   "alias",
-				"foreignField": "alias",
-				"as":           "visit",
+				"from": colvisit,
+				"as":   "visit",
+				"pipeline": mongo.Pipeline{bson.D{
+					primitive.E{Key: "$match", Value: bson.M{
+						"$expr": bson.M{
+							"$and": []bson.M{
+								{"$eq": []string{a, "$alias"}},
+								{"$gte": []interface{}{"$time", start}},
+								{"$lt": []interface{}{"$time", end}},
+							},
+						},
+					}},
+				}},
 			}},
 		},
 		bson.D{
