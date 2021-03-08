@@ -271,6 +271,8 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	return tryPath, nil
 }
 
+var errInvalidStatParam = errors.New("invalid stat parameter")
+
 type records struct {
 	Title           string
 	Host            string
@@ -281,7 +283,10 @@ type records struct {
 
 func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
 	if len(r.URL.Query()) != 0 {
-		return s.statData(ctx, w, r, kind)
+		err := s.statData(ctx, w, r, kind)
+		if !errors.Is(err, errInvalidStatParam) {
+			return err
+		}
 	}
 
 	var prefix string
@@ -313,21 +318,30 @@ func (s *server) statData(
 	w http.ResponseWriter,
 	r *http.Request,
 	k aliasKind,
-) error {
+) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			retErr = fmt.Errorf("%w: %v", errInvalidStatParam, retErr)
+		}
+	}()
+
 	params := r.URL.Query()
 	a := params.Get("a")
 	if a == "" {
-		return errors.New("alias is not provided")
+		retErr = errors.New("alias is not provided")
+		return
 	}
 
 	mode := params.Get("stat")
 	if mode == "" {
-		return errors.New("stat mode is not provided")
+		retErr = errors.New("stat mode is not provided")
+		return
 	}
 
 	start, end, err := parseDuration(params)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 
 	w.Header().Add("Content-Type", "application/json")
@@ -336,49 +350,58 @@ func (s *server) statData(
 	case "referer":
 		referers, err := s.db.CountReferer(ctx, a, k, start, end)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		b, err := json.Marshal(referers)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		w.Write(b)
-		return err
+		return
 	case "ua":
 		referers, err := s.db.CountUA(ctx, a, k, start, end)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		b, err := json.Marshal(referers)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		w.Write(b)
-		return err
+		return
 	case "loc":
 		locations, err := s.db.CountLocation(ctx, a, k, start, end)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		b, err := json.Marshal(locations)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		w.Write(b)
 		return err
 	case "time":
 		hist, err := s.db.CountVisitHist(ctx, a, k, start, end)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		b, err := json.Marshal(hist)
 		if err != nil {
-			return err
+			retErr = err
+			return
 		}
 		w.Write(b)
-		return err
+		return
 	default:
-		return fmt.Errorf("%s stat mode is not supported", mode)
+		retErr = fmt.Errorf("%s stat mode is not supported", mode)
+		return
 	}
 }
 
