@@ -2,6 +2,8 @@
 
 The request redirector for changkun.de.
 
+![](./demo.png)
+
 ## CLI Usage
 
 ```
