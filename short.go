@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -287,7 +288,10 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		if !errors.Is(err, errInvalidStatParam) {
 			return err
 		}
+		log.Println(err)
 	}
+
+	w.Header().Add("Content-Type", "text/html")
 
 	var prefix string
 	switch kind {
@@ -309,7 +313,7 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 		return err
 	}
 	ars.Records = rs
-
+	statsTmpl = template.Must(template.ParseFiles("public/stats.html"))
 	return statsTmpl.Execute(w, ars)
 }
 

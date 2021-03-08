@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Global site tag (gtag.js) - Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id={{ .GoogleAnalytics }}"></script>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ .GoogleAnalytics }}"></script>
   <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', '{{ .GoogleAnalytics }}');
 </script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>changkun.de/s/redir</title>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
-  <style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>changkun.de/s/redir</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous"></script>
+<style>
   :root {
     --gray-1: #202224;
     --gray-2: #3e4042;
@@ -43,9 +44,6 @@
     background-color: var(--gray-1);
     color: var(--gray-6);
   }
-  table {
-    text-align: left;
-  }
   body {
     background-color: var(--gray-2);
   }
@@ -57,28 +55,285 @@
     color: var(--turq-med);
     text-decoration: none;
   }
+  .alias-header {
+    color: var(--gray-7);
+  }
   #app {
     padding: 20px;
+  }
+  .accordion-button {
+    color: var(--gray-7);
+  }
+  .accordion-button:not(.collapsed) {
+    color: var(--gray-10);
+    background-color: var(--turq-dark);
+  }
+  .accordion-body {
+    padding: 0;
+  }
+  .alias-charts {
+    width: 30%;
+    height: 500px;
+    background-color: var(--gray-2);
+    padding: 0;
+  }
+  .row {
+    margin: 10px 0;
   }
   </style>
 </head>
 <body>
-<div id="app" class="bg-dark">
-  <h1>changkun.de</h1>
-  <h5><a href="https://changkun.de/s/redir">URL Shortner/Redirector</a></h5>
-  <table class="table table-striped table-dark" style="width:100%">
-    <tr>
-      <th>PV/UV</th>
-      <th>URL</th>
-    </tr>
-    {{range .Records}}
-    <tr>
-      <td>{{ .PV }}/{{ .UV }}</td>
-      <td><a href="{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a></td>
-    </tr>
-    {{end}}
-  </table>
+<div id="app">
+<h1>changkun.de</h1>
+<h5><a href="https://changkun.de/s/redir">URL Shortner/Redirector</a></h5>
+
+<div class="accordion accordion-flush" id="aliasStatData">
+  <div class="">
+    <h2 class="">
+      <div class="accordion-button collapsed">
+        <div class="d-inline-flex col-4">PV/UV</div>
+        <div class="d-inline-flex col-9">Short Link</div>
+      </div>
+    </h2>
+  </div>
+  {{range .Records}}
+  <div class="alias-item">
+    <h2 class="alias-header" id="alias-{{.Alias}}">
+      <div class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#alias-{{.Alias}}-data" aria-expanded="false" aria-controls="alias-{{.Alias}}-data">
+        <div class="d-inline-flex col-4">{{ .PV }}/{{ .UV }}</div>
+        <a class="links d-inline-flex col-9" href="{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a>
+      </div>
+    </h2>
+    <div id="alias-{{.Alias}}-data" class="alias-collapse collapse" aria-labelledby="alias-{{.Alias}}" data-bs-parent="#aliasStatData">
+      <div class="row align-items-start">
+        <div id="alias-{{.Alias}}-data-stat-time" class="d-inline-flex col alias-charts">TODO</div>
+        <div id="alias-{{.Alias}}-data-stat-referer" class="d-inline-flex col alias-charts">TODO</div>
+        <div id="alias-{{.Alias}}-data-stat-ua" class="d-inline-flex col alias-charts">TODO</div>
+      </div>
+    </div>
+  </div>
+  {{end}}
+</div>
 </div>
 <script async src="//changkun.de/urlstat/client.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ua-parser-js@0/dist/ua-parser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.0.2/dist/echarts.min.js"></script>
+<script>
+const links = document.getElementsByClassName('links')
+for (let i = 0; i < links.length; i++) {
+  links[i].addEventListener('click', e => {
+    e.stopPropagation()
+    // Why do we need this?
+    window.open(e.target.href)
+  })
+}
+
+const uaparser = new UAParser()
+const all = document.getElementsByClassName('alias-header')
+for (let i = 0; i < all.length; i++) {
+  const myCollapsible = document.getElementById(`${all[i].id}-data`)
+  myCollapsible.addEventListener('show.bs.collapse', (e) => {
+    const id = all[i].id
+    addTimeCharts(id)
+    addRefererCharts(id)
+    addUACharts(id)
+  })
+}
+
+const fetchData = (endpoint, onData) => {
+  fetch(endpoint).then(resp => {
+    if (!resp.ok) throw Error(resp.statusText)
+    return resp
+  }).then(resp => resp.json()).then(resp => {
+    onData(resp)
+  }).catch(err => console.error(err))
+}
+
+const dateRange = (startDate, endDate, steps = 1) => {
+  const dates = {};
+  let currentDate = new Date(startDate)
+
+  while (currentDate <= new Date(endDate)) {
+    dates[formatDate(new Date(currentDate))] = 0
+    currentDate.setUTCDate(currentDate.getUTCDate() + steps)
+  }
+  return dates
+}
+const formatDate = (date) => {
+    let d = new Date(date),
+        month = '' + (d.getMonth() + 1),
+        day = '' + d.getDate(),
+        year = d.getFullYear()
+    if (month.length < 2) 
+        month = '0' + month
+    if (day.length < 2) 
+        day = '0' + day
+    return [year, month, day].join('-')
+}
+
+function addUACharts(id) {
+  const chartDom = document.getElementById(`${id}-data-stat-ua`)
+  fetchData('/s?' + new URLSearchParams({
+      a: id.replace('alias-', ''),
+      stat: 'ua',
+      // TODO: data zoom
+      // t0: 
+      // t1: 
+  }), (data) => {
+    for (let i = 0; i < data.length; i++) {
+      const entry = data[i]
+      const r = uaparser.setUA(entry.ua).getResult()
+      data[i].browser = r.browser.name
+      data[i].device = r.os.name
+    }
+    let browsers = {}
+    let devices = {}
+    for (let i = 0; i < data.length; i++) {
+      if (data[i].browser == undefined) {
+        data[i].browser = 'unknown'
+      }
+      if (browsers[data[i].browser] == undefined) {
+        browsers[data[i].browser] = data[i].count
+      } else {
+        browsers[data[i].browser] += data[i].count
+      }
+
+      if (data[i].device == undefined) {
+        data[i].device = 'unknown'
+      }
+      if (devices[data[i].device] == undefined) {
+        devices[data[i].device] = data[i].count
+      } else {
+        devices[data[i].device] += data[i].count
+      }
+    }
+    const browserArray = []
+    for (const [key, value] of Object.entries(browsers)) {
+      browserArray.push({value: value, name: key})
+    }
+    const deviceArray = []
+    for (const [key, value] of Object.entries(devices)) {
+      deviceArray.push({value: value, name: key})
+    }
+
+    echarts.init(chartDom).setOption({
+      series: [
+        {
+          name: 'Browsers',
+          type: 'pie',
+          selectedMode: 'single',
+          radius:  ['50%', '80%'],
+          label: {
+              fontSize: 14,
+              color: 'white',
+          },
+          labelLine: {
+              length: 30,
+          },
+          data: browserArray
+        },
+        {
+          name: 'Devices',
+          type: 'pie',
+          radius: [0, '40%'],
+          label: {
+            position: 'inner',
+            color: 'white',
+          },
+          data: deviceArray
+        }
+      ]
+    })
+  })
+}
+
+function addRefererCharts(id) {
+  const chartDom = document.getElementById(`${id}-data-stat-referer`)
+  fetchData('/s?' + new URLSearchParams({
+      a: id.replace('alias-', ''),
+      stat: 'referer',
+      // TODO: data zoom
+      // t0: 
+      // t1: 
+  }), (data) => {
+    echarts.init(chartDom).setOption({
+      tooltip: {
+          trigger: 'item'
+      },
+      series: [
+          {
+              name: 'Referer',
+              type: 'pie',
+              label: {
+                  fontSize: 14,
+                  color: 'white',
+              },
+              radius: '80%',
+              data: data.map(entry => {
+                if (entry.referer == 'unknown') {
+                  entry.referer = 'direct'
+                }
+                return {
+                  value: entry.count,
+                  name: entry.referer
+                }
+              }),
+          }
+      ]
+    })
+  })
+}
+
+function addTimeCharts(id) {
+  const chartDom = document.getElementById(`${id}-data-stat-time`)
+  fetchData('/s?' + new URLSearchParams({
+      a: id.replace('alias-', ''),
+      stat: 'time',
+      // TODO: data zoom
+      // t0: 
+      // t1: 
+  }), (data) => {
+    const today = new Date()
+    const start = new Date()
+    start.setDate(today.getDate() - 6)
+
+    const begin = formatDate(start)
+    const end = formatDate(today)
+    const dates = dateRange(begin, end)
+
+    for (let i = 0; i < data.length; i++) {
+      const d = formatDate(new Date(data[i].time))
+      if (dates[d] != undefined) {
+        dates[d] += data[i].count
+      }
+    }
+    echarts.init(chartDom).setOption({
+      xAxis: {
+        type: 'category',
+        data: Object.keys(dates),
+        axisLine: {
+          lineStyle: {
+            color: '#fff',
+          },
+        },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: {
+          lineStyle: {
+            color: '#fff',
+          },
+        },
+      },
+      series: [{
+        data: Object.values(dates),
+        type: 'line',
+        smooth: true,
+        areaStyle: {},
+      }]
+    })
+  })
+}
+</script>
 </body>
 </html>

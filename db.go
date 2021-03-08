@@ -350,11 +350,8 @@ func (db *database) CountLocation(ctx context.Context, a string, k aliasKind, st
 }
 
 type timehist struct {
-	Year  int `bson:"year"  json:"year"`
-	Month int `bson:"month" json:"month"`
-	Day   int `bson:"day"   json:"day"`
-	Hour  int `bson:"hour"  json:"hour"`
-	Count int `bson:"count" json:"count"`
+	Time  time.Time `bson:"time"  json:"time"`
+	Count int       `bson:"count" json:"count"`
 }
 
 func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]timehist, error) {
@@ -407,10 +404,19 @@ func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, s
 		}},
 		bson.D{primitive.E{
 			Key: "$lookup", Value: bson.M{
-				"from":         colvisit,
-				"localField":   "alias",
-				"foreignField": "alias",
-				"as":           "visit",
+				"from": colvisit,
+				"as":   "visit",
+				"pipeline": mongo.Pipeline{bson.D{
+					primitive.E{Key: "$match", Value: bson.M{
+						"$expr": bson.M{
+							"$and": []bson.M{
+								{"$eq": []string{a, "$alias"}},
+								{"$gte": []interface{}{"$time", start}},
+								{"$lt": []interface{}{"$time", end}},
+							},
+						},
+					}},
+				}},
 			},
 		}},
 		bson.D{primitive.E{
@@ -436,24 +442,27 @@ func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, s
 			Key: "$group",
 			Value: bson.M{
 				"_id": bson.M{
-					"year":  "$year",
-					"month": "$month",
-					"day":   "$day",
-					"hour":  "$hour",
+					"$dateFromParts": bson.M{
+						"year":  "$year",
+						"month": "$month",
+						"day":   "$day",
+						"hour":  "$hour",
+					},
 				},
-				"year":  bson.M{"$first": "$year"},
-				"month": bson.M{"$first": "$month"},
-				"day":   bson.M{"$first": "$day"},
-				"hour":  bson.M{"$first": "$hour"},
+				"time": bson.M{"$first": bson.M{
+					"$dateFromParts": bson.M{
+						"year":  "$year",
+						"month": "$month",
+						"day":   "$day",
+						"hour":  "$hour",
+					},
+				}},
 				"count": bson.M{"$sum": 1},
 			},
 		}},
 		bson.D{primitive.E{
 			Key: "$sort", Value: bson.M{
-				"year":  -1,
-				"month": -1,
-				"day":   -1,
-				"hour":  -1,
+				"_id": -1,
 			},
 		}},
 	}, opts)
