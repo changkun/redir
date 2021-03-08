@@ -287,6 +287,189 @@ func (db *database) CountUA(ctx context.Context, a string, k aliasKind, start, e
 	return results, nil
 }
 
+type locstat struct {
+	Locations []string `bson:"locs" json:"locs"`
+}
+
+// CountLocation counts the recorded IPs from visit history.
+// FIXME: IP can be changed overtime, it might be a good idea to just store
+// the parse geo location (latitude, and longitude, and accuracy).
+// Q: Any APIs can convert IP to geo location?
+func (db *database) CountLocation(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]string, error) {
+	col := db.cli.Database(dbname).Collection(collink)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+
+	// db.links.aggregate([ {$match: {kind: 0, alias: 'gp-1-intro'}}, {'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}}, {'$group': {_id: '$alias', ip: {'$first': '$visit.ip'}}}, ])
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{primitive.E{
+			Key: "$match", Value: bson.M{
+				"kind": k, "alias": a,
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$lookup", Value: bson.M{
+				"from": colvisit,
+				"as":   "visit",
+				"pipeline": mongo.Pipeline{bson.D{
+					primitive.E{Key: "$match", Value: bson.M{
+						"$expr": bson.M{
+							"$and": []bson.M{
+								{"$eq": []string{a, "$alias"}},
+								{"$gte": []interface{}{"$time", start}},
+								{"$lt": []interface{}{"$time", end}},
+							},
+						},
+					}},
+				}},
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$group",
+			Value: bson.M{
+				"_id":  "$alias",
+				"locs": bson.M{"$first": "$visit.ip"},
+			},
+		}},
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count ua: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []locstat
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch ua results: %w", err)
+	}
+
+	// Is it possible that we don't have any result or have mutiple entries?
+	if len(results) != 1 {
+		return []string{}, nil
+	}
+
+	return results[0].Locations, nil
+}
+
+type timehist struct {
+	Year  int `bson:"year"  json:"year"`
+	Month int `bson:"month" json:"month"`
+	Day   int `bson:"day"   json:"day"`
+	Hour  int `bson:"hour"  json:"hour"`
+	Count int `bson:"count" json:"count"`
+}
+
+func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]timehist, error) {
+	// db.links.aggregate([
+	//     {$match: {kind: 0, alias: 'blog'}},
+	//     {'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
+	//     {
+	//         $group: {
+	//             _id: "$alias", time: {'$first': '$visit.time'}
+	//         },
+	//     },
+	//     {'$unwind': "$time"},
+	//     {
+	//         $project: {
+	//             "year": {$year: "$time"},
+	//             "month": {$month: "$time"},
+	//             "day": {$dayOfMonth: "$time"},
+	//             "hour": {$hour: "$time"},
+	//         },
+	//     },
+	//     {
+	//         "$group":{
+	//             "_id": {
+	//                 "year":"$year","month":"$month","day":"$day","hour":"$hour",
+	//             },
+	//             'year': {'$first': '$year'},
+	//             'month': {'$first': '$month'},
+	//             'day': {'$first': '$day'},
+	//             'hour': {'$first': '$hour'},
+	//             'count': {$sum: 1},
+	//         },
+	//     },
+	//     {
+	//         $sort: {
+	//             year: -1,
+	//             month: -1,
+	//             day: -1,
+	//             hour: -1,
+	//         },
+	//     },
+	// ])
+
+	col := db.cli.Database(dbname).Collection(collink)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{primitive.E{
+			Key: "$match", Value: bson.M{
+				"kind": k, "alias": a,
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$group", Value: bson.M{
+				"_id":  "$alias",
+				"time": bson.M{"$first": "$visit.time"},
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$unwind", Value: bson.M{
+				"path": "$time",
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$project", Value: bson.M{
+				"year":  bson.M{"$year": "$time"},
+				"month": bson.M{"$month": "$time"},
+				"day":   bson.M{"$dayOfMonth": "$time"},
+				"hour":  bson.M{"$hour": "$time"},
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$group",
+			Value: bson.M{
+				"_id": bson.M{
+					"year":  "$year",
+					"month": "$month",
+					"day":   "$day",
+					"hour":  "$hour",
+				},
+				"year":  bson.M{"$first": "$year"},
+				"month": bson.M{"$first": "$month"},
+				"day":   bson.M{"$first": "$day"},
+				"hour":  bson.M{"$first": "$hour"},
+				"count": bson.M{"$sum": 1},
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$sort", Value: bson.M{
+				"year":  -1,
+				"month": -1,
+				"day":   -1,
+				"hour":  -1,
+			},
+		}},
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count time hist: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []timehist
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch time hist results: %w", err)
+	}
+
+	return results, nil
+}
+
 func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 	col := db.cli.Database(dbname).Collection(colvisit)
 
@@ -356,10 +539,7 @@ func (db *database) CountVisit(ctx context.Context, kind aliasKind) (rs []record
 			}},
 		},
 		bson.D{
-			primitive.E{Key: "$sort", Value: bson.M{"pv": -1}},
-		},
-		bson.D{
-			primitive.E{Key: "$sort", Value: bson.M{"uv": -1}},
+			primitive.E{Key: "$sort", Value: bson.M{"pv": -1, "uv": -1}},
 		},
 	}, opts)
 	if err != nil {

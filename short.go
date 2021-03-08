@@ -205,11 +205,10 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			ip := readIP(r)
 			err := s.db.RecordVisit(ctx, &visit{
 				Alias:   alias,
 				Kind:    kind,
-				IP:      ip,
+				IP:      readIP(r),
 				UA:      r.UserAgent(),
 				Referer: r.Referer(),
 				Time:    time.Now().UTC(),
@@ -351,6 +350,28 @@ func (s *server) statData(
 			return err
 		}
 		b, err := json.Marshal(referers)
+		if err != nil {
+			return err
+		}
+		w.Write(b)
+		return err
+	case "loc":
+		locations, err := s.db.CountLocation(ctx, a, k, start, end)
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(locations)
+		if err != nil {
+			return err
+		}
+		w.Write(b)
+		return err
+	case "time":
+		hist, err := s.db.CountVisitHist(ctx, a, k, start, end)
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(hist)
 		if err != nil {
 			return err
 		}
