@@ -68,6 +68,9 @@
     color: var(--gray-10);
     background-color: var(--turq-dark);
   }
+  .table-header .accordion-button:after {
+    background-image: none;
+  }
   .accordion-body {
     padding: 0;
   }
@@ -88,27 +91,25 @@
 <h5><a href="https://changkun.de/s/redir">URL Shortner/Redirector</a></h5>
 
 <div class="accordion accordion-flush" id="aliasStatData">
-  <div class="">
-    <h2 class="">
+  <div class="table-header">
       <div class="accordion-button collapsed">
-        <div class="d-inline-flex col-4">PV/UV</div>
-        <div class="d-inline-flex col-9">Short Link</div>
+        <div class="d-inline-flex col-2">PV/UV</div>
+        <div class="d-inline-flex">Short Link</div>
       </div>
-    </h2>
   </div>
   {{range .Records}}
   <div class="alias-item">
     <h2 class="alias-header" id="alias-{{.Alias}}">
       <div class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#alias-{{.Alias}}-data" aria-expanded="false" aria-controls="alias-{{.Alias}}-data">
-        <div class="d-inline-flex col-4">{{ .PV }}/{{ .UV }}</div>
-        <a class="links d-inline-flex col-9" href="{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a>
+        <div class="d-inline-flex col-2">{{ .PV }}/{{ .UV }}</div>
+        <a class="links d-inline-flex" href="{{ $.Prefix }}{{ .Alias }}">{{ $.Host }}{{ $.Prefix }}{{ .Alias }}</a>
       </div>
     </h2>
     <div id="alias-{{.Alias}}-data" class="alias-collapse collapse" aria-labelledby="alias-{{.Alias}}" data-bs-parent="#aliasStatData">
       <div class="row align-items-start">
-        <div id="alias-{{.Alias}}-data-stat-time" class="d-inline-flex col alias-charts">TODO</div>
-        <div id="alias-{{.Alias}}-data-stat-referer" class="d-inline-flex col alias-charts">TODO</div>
-        <div id="alias-{{.Alias}}-data-stat-ua" class="d-inline-flex col alias-charts">TODO</div>
+        <div id="alias-{{.Alias}}-data-stat-time" class="d-inline-flex col col-sm-12 alias-charts">TODO</div>
+        <div id="alias-{{.Alias}}-data-stat-referer" class="d-inline-flex col col-sm-12 alias-charts">TODO</div>
+        <div id="alias-{{.Alias}}-data-stat-ua" class="d-inline-flex col col-sm-12 alias-charts">TODO</div>
       </div>
     </div>
   </div>
@@ -222,7 +223,7 @@ function addUACharts(id) {
           name: 'Browsers',
           type: 'pie',
           selectedMode: 'single',
-          radius:  ['50%', '80%'],
+          radius:  ['40%', '70%'],
           label: {
               fontSize: 14,
               color: 'white',
@@ -235,7 +236,7 @@ function addUACharts(id) {
         {
           name: 'Devices',
           type: 'pie',
-          radius: [0, '40%'],
+          radius: [0, '30%'],
           label: {
             position: 'inner',
             color: 'white',
@@ -268,7 +269,7 @@ function addRefererCharts(id) {
                   fontSize: 14,
                   color: 'white',
               },
-              radius: '80%',
+              radius: '70%',
               data: data.map(entry => {
                 if (entry.referer == 'unknown') {
                   entry.referer = 'direct'
