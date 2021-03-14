@@ -24,8 +24,7 @@ var (
 )
 
 func newServer(ctx context.Context) *server {
-	xTmpl = template.Must(template.ParseFiles("public/x.html"))
-	statsTmpl = template.Must(template.ParseFiles("public/stats.html"))
+	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
 
 	db, err := newDB(conf.Store)
 	if err != nil {
@@ -43,6 +42,13 @@ func (s *server) close() {
 
 func (s *server) registerHandler() {
 	l := logging()
+
+	// admin handler
+	// index: /s
+	// admin: /s?mode=admin
+	// create: POST /s {action: "create", alias: "xxx", "link": "", "tag": "xxx"}
+	// update: POST /s {action: "update", alias: "xxx", "link": "", "tag": "xxx"}
+	// delete: POST /s {action: "delete", alias: "xxx"}
 
 	// short redirector
 	http.Handle(conf.S.Prefix, l(s.shortHandler(kindShort)))
@@ -128,3 +134,13 @@ func (s *server) xHandler() http.Handler {
 		}
 	})
 }
+
+const xtmpl = `<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta name="go-import" content="{{.ImportRoot}} {{.VCS}} {{.VCSRoot}}">
+<meta http-equiv="refresh" content="0; url=https://pkg.go.dev/{{.ImportRoot}}{{.Suffix}}">
+</head><body>
+Redirecting to <a href="https://pkg.go.dev/{{.ImportRoot}}{{.Suffix}}">pkg.go.dev/{{.ImportRoot}}{{.Suffix}}</a>...
+<script async src="//changkun.de/urlstat/client.js"></script>
+</body></html>`
