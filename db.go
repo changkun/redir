@@ -29,10 +29,11 @@ const (
 
 // redirect records a kind of alias and its correlated link.
 type redirect struct {
-	Alias   string    `json:"alias"   bson:"alias"`
-	Kind    aliasKind `json:"kind"    bson:"kind"`
-	URL     string    `json:"url"     bson:"url"`
-	Private bool      `json:"private" bson:"private"`
+	Alias     string    `json:"alias"      bson:"alias"`
+	Kind      aliasKind `json:"kind"       bson:"kind"`
+	URL       string    `json:"url"        bson:"url"`
+	Private   bool      `json:"private"    bson:"private"`
+	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
 }
 
 // visit indicates an record of visit pattern.
@@ -92,20 +93,23 @@ func (db *database) StoreAlias(ctx context.Context, r *redirect) (err error) {
 }
 
 // UpdateAlias updates the link of a given alias
-func (db *database) UpdateAlias(ctx context.Context, a, l string) (*redirect, error) {
+func (db *database) UpdateAlias(ctx context.Context, r *redirect) error {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	var r redirect
+	var ret redirect
 	err := col.FindOneAndUpdate(ctx,
-		bson.M{"alias": a},
-		bson.M{"$set": bson.M{"url": l}},
-	).Decode(&r)
+		bson.M{"alias": r.Alias},
+		bson.M{"$set": bson.M{
+			"url":        r.URL,
+			"private":    r.Private,
+			"valid_from": r.ValidFrom,
+		}},
+	).Decode(&ret)
 	if err != nil {
-		err = fmt.Errorf("failed to update alias %s: %v", a, err)
-		return nil, err
+		err = fmt.Errorf("failed to update alias %s: %v", r.Alias, err)
+		return err
 	}
-	r.URL = l
-	return &r, nil
+	return nil
 }
 
 // Delete deletes a given short alias if exists
@@ -285,68 +289,6 @@ func (db *database) CountUA(ctx context.Context, a string, k aliasKind, start, e
 	}
 
 	return results, nil
-}
-
-type locstat struct {
-	Locations []string `bson:"locs" json:"locs"`
-}
-
-// CountLocation counts the recorded IPs from visit history.
-// FIXME: IP can be changed overtime, it might be a good idea to just store
-// the parse geo location (latitude, and longitude, and accuracy).
-// Q: Any APIs can convert IP to geo location?
-func (db *database) CountLocation(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]string, error) {
-	col := db.cli.Database(dbname).Collection(collink)
-	opts := options.Aggregate().SetMaxTime(10 * time.Second)
-
-	// db.links.aggregate([ {$match: {kind: 0, alias: 'gp-1-intro'}}, {'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}}, {'$group': {_id: '$alias', ip: {'$first': '$visit.ip'}}}, ])
-	cur, err := col.Aggregate(ctx, mongo.Pipeline{
-		bson.D{primitive.E{
-			Key: "$match", Value: bson.M{
-				"kind": k, "alias": a,
-			},
-		}},
-		bson.D{primitive.E{
-			Key: "$lookup", Value: bson.M{
-				"from": colvisit,
-				"as":   "visit",
-				"pipeline": mongo.Pipeline{bson.D{
-					primitive.E{Key: "$match", Value: bson.M{
-						"$expr": bson.M{
-							"$and": []bson.M{
-								{"$eq": []string{a, "$alias"}},
-								{"$gte": []interface{}{"$time", start}},
-								{"$lt": []interface{}{"$time", end}},
-							},
-						},
-					}},
-				}},
-			},
-		}},
-		bson.D{primitive.E{
-			Key: "$group",
-			Value: bson.M{
-				"_id":  "$alias",
-				"locs": bson.M{"$first": "$visit.ip"},
-			},
-		}},
-	}, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count ua: %w", err)
-	}
-	defer cur.Close(ctx)
-
-	var results []locstat
-	if err := cur.All(ctx, &results); err != nil {
-		return nil, fmt.Errorf("failed to fetch ua results: %w", err)
-	}
-
-	// Is it possible that we don't have any result or have mutiple entries?
-	if len(results) != 1 {
-		return []string{}, nil
-	}
-
-	return results[0].Locations, nil
 }
 
 type timehist struct {

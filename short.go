@@ -50,8 +50,16 @@ func importFile(fname string) {
 	}
 
 	var d struct {
-		Short  map[string]string `yaml:"short"`
-		Random []string          `yaml:"random"`
+		Short map[string]struct {
+			URL       string `yaml:"url"`
+			Private   bool   `yaml:"private"`
+			ValidFrom string `yaml:"valid_from"`
+		} `yaml:"short"`
+		Random []struct {
+			URL       string `yaml:"url"`
+			Private   bool   `yaml:"private"`
+			ValidFrom string `yaml:"valid_from"`
+		} `yaml:"random"`
 	}
 	err = yaml.Unmarshal(b, &d)
 	if err != nil {
@@ -59,20 +67,57 @@ func importFile(fname string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
-	for alias, link := range d.Short {
-		err = shortCmd(ctx, opUpdate, alias, link)
+	for alias, info := range d.Short {
+		var t time.Time
+		if info.ValidFrom != "" {
+			t, err = time.Parse(time.RFC3339, info.ValidFrom)
+			if err != nil {
+				log.Fatalf("incorrect time format, expect RFC3339, but: %v, err: %v", info.ValidFrom, err)
+			}
+		} else {
+			t = time.Now().UTC()
+		}
+
+		r := &redirect{
+			Alias:     alias,
+			URL:       info.URL,
+			Kind:      kindShort,
+			Private:   info.Private,
+			ValidFrom: t,
+		}
+
+		err = shortCmd(ctx, opUpdate, r)
 		if err != nil {
-			err = shortCmd(ctx, opCreate, alias, link)
+			err = shortCmd(ctx, opCreate, r)
 			if err != nil {
 				log.Printf("cannot import alias %v: %v\n", alias, err)
 			}
 		}
 	}
-	for _, link := range d.Random {
-		err = shortCmd(ctx, opUpdate, "", link)
+	for _, info := range d.Random {
+
+		t, err := time.Parse(time.RFC3339, info.ValidFrom)
+		if err != nil {
+			log.Fatalf("incorrect time format, expect RFC3339, but: %v", info.ValidFrom)
+		}
+		// This might conflict with existing ones, it should be fine
+		// at the moment, the user of redir can always the command twice.
+		if conf.R.Length <= 0 {
+			conf.R.Length = 6
+		}
+		alias := randstr(conf.R.Length)
+
+		r := &redirect{
+			Alias:     alias,
+			URL:       info.URL,
+			Kind:      kindRandom,
+			Private:   info.Private,
+			ValidFrom: t,
+		}
+		err = shortCmd(ctx, opUpdate, r)
 		if err != nil {
 			for i := 0; i < 10; i++ { // try 10x maximum
-				err = shortCmd(ctx, opCreate, "", link)
+				err = shortCmd(ctx, opCreate, r)
 				if err != nil {
 					log.Printf("cannot create alias %v: %v\n", alias, err)
 					continue
@@ -81,11 +126,10 @@ func importFile(fname string) {
 			}
 		}
 	}
-	return
 }
 
 // shortCmd processes the given alias and link with a specified op.
-func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
+func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
 	s, err := newDB(conf.Store)
 	if err != nil {
 		err = fmt.Errorf("cannot create a new alias: %w", err)
@@ -101,50 +145,35 @@ func shortCmd(ctx context.Context, operate op, alias, link string) (err error) {
 
 	switch operate {
 	case opCreate:
-		kind := kindShort
-		if alias == "" {
-			// This might conflict with existing ones, it should be fine
-			// at the moment, the user of redir can always the command twice.
-			if conf.R.Length <= 0 {
-				conf.R.Length = 6
-			}
-			alias = randstr(conf.R.Length)
-			kind = kindRandom
-		}
-		err = s.StoreAlias(ctx, &redirect{
-			Alias:   alias,
-			Kind:    kind,
-			URL:     link,
-			Private: false,
-		})
+		err = s.StoreAlias(ctx, r)
 		if err != nil {
 			return
 		}
-		log.Printf("alias %v has been created:\n", alias)
+		log.Printf("alias %v has been created:\n", r.Alias)
 
 		var prefix string
-		switch kind {
+		switch r.Kind {
 		case kindShort:
 			prefix = conf.S.Prefix
 		case kindRandom:
 			prefix = conf.R.Prefix
 		}
-		fmt.Printf("%s%s%s\n", conf.Host, prefix, alias)
+		log.Printf("%s%s%s\n", conf.Host, prefix, r.Alias)
 	case opUpdate:
-		_, err = s.UpdateAlias(ctx, alias, link)
+		err = s.UpdateAlias(ctx, r)
 		if err != nil {
 			return
 		}
-		log.Printf("alias %v has been updated.\n", alias)
+		log.Printf("alias %v has been updated.\n", r.Alias)
 	case opDelete:
-		err = s.DeleteAlias(ctx, alias)
+		err = s.DeleteAlias(ctx, r.Alias)
 		if err != nil {
 			return
 		}
-		log.Printf("alias %v has been deleted.\n", alias)
+		log.Printf("alias %v has been deleted.\n", r.Alias)
 	case opFetch:
 		var r *redirect
-		r, err = s.FetchAlias(ctx, alias)
+		r, err = s.FetchAlias(ctx, r.Alias)
 		if err != nil {
 			return
 		}
@@ -186,24 +215,34 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 		}
 
 		// figure out redirect location
-		url, ok := s.cache.Get(alias)
+		red, ok := s.cache.Get(alias)
 		if !ok {
-			url, err = s.checkdb(ctx, alias)
+			red, err = s.checkdb(ctx, alias)
 			if err != nil {
-				url, err = s.checkvcs(ctx, alias)
+				red, err = s.checkvcs(ctx, alias)
 				if err != nil {
 					return
 				}
 			}
-			s.cache.Put(alias, url)
+			s.cache.Put(alias, red)
 		}
 
 		// redirect the user immediate, but run pv/uv count in background
-		http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+		fmt.Println("check:", time.Now().UTC(), red.ValidFrom.UTC())
+		if time.Now().UTC().Sub(red.ValidFrom.UTC()) > 0 {
+			http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
+		} else {
+			err = sTmpl.Execute(w, &struct {
+				ValidFrom time.Time
+			}{red.ValidFrom})
+			if err != nil {
+				return
+			}
+		}
 
 		// count visit in another goroutine so it won't block the redirect.
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
 			err := s.db.RecordVisit(ctx, &visit{
@@ -222,17 +261,17 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 }
 
 // checkdb checks whether the given alias is exsited in the redir database
-func (s *server) checkdb(ctx context.Context, alias string) (string, error) {
+func (s *server) checkdb(ctx context.Context, alias string) (*redirect, error) {
 	a, err := s.db.FetchAlias(ctx, alias)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return a.URL, nil
+	return a, nil
 }
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
 // then creates a new alias and returns url of the vcs repository.
-func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
+func (s *server) checkvcs(ctx context.Context, alias string) (*redirect, error) {
 
 	// construct the try path and make the request to vcs
 	repoPath := conf.X.RepoPath
@@ -242,12 +281,12 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	tryPath := fmt.Sprintf("%s/%s", repoPath, alias)
 	resp, err := http.Get(tryPath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK &&
 		resp.StatusCode != http.StatusMovedPermanently {
-		return "", fmt.Errorf("%s is not a repository", tryPath)
+		return nil, fmt.Errorf("%s is not a repository", tryPath)
 	}
 
 	// figure out the new location
@@ -256,20 +295,22 @@ func (s *server) checkvcs(ctx context.Context, alias string) (string, error) {
 	}
 
 	// store such a try path
-	err = s.db.StoreAlias(ctx, &redirect{
-		Alias:   alias,
-		Kind:    kindShort,
-		URL:     tryPath,
-		Private: false,
-	})
+	r := &redirect{
+		Alias:     alias,
+		Kind:      kindShort,
+		URL:       tryPath,
+		Private:   false,
+		ValidFrom: time.Now().UTC(),
+	}
+	err = s.db.StoreAlias(ctx, r)
 	if err != nil {
 		if errors.Is(err, errExistedAlias) {
 			return s.checkdb(ctx, alias)
 		}
-		return "", err
+		return nil, err
 	}
 
-	return tryPath, nil
+	return r, nil
 }
 
 var errInvalidStatParam = errors.New("invalid stat parameter")
@@ -377,19 +418,6 @@ func (s *server) statData(
 		}
 		w.Write(b)
 		return
-	case "loc":
-		locations, err := s.db.CountLocation(ctx, a, k, start, end)
-		if err != nil {
-			retErr = err
-			return
-		}
-		b, err := json.Marshal(locations)
-		if err != nil {
-			retErr = err
-			return
-		}
-		w.Write(b)
-		return err
 	case "time":
 		hist, err := s.db.CountVisitHist(ctx, a, k, start, end)
 		if err != nil {

@@ -11,14 +11,15 @@ import (
 )
 
 type item struct {
-	k, v string
+	k string
+	v interface{}
 }
 
 // lru is a naive thread-safe lru cache
 type lru struct {
 	cap   uint
 	size  uint
-	elems *list.List // of item
+	elems *list.List // of redirect
 
 	mu sync.RWMutex
 }
@@ -41,11 +42,8 @@ func newLRU(doexpire bool) *lru {
 // not synced.
 func (l *lru) clear() {
 	t := time.NewTicker(time.Minute * 5)
-	for {
-		select {
-		case <-t.C:
-			l.flush()
-		}
+	for range t.C {
+		l.flush()
 	}
 }
 
@@ -65,28 +63,28 @@ func (l *lru) Len() uint {
 	return l.size
 }
 
-func (l *lru) Get(k string) (string, bool) {
+func (l *lru) Get(k string) (*redirect, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {
 			l.elems.MoveToFront(e)
-			return e.Value.(*item).v, true
+			return e.Value.(*item).v.(*redirect), true
 		}
 	}
-	return "", false
+	return nil, false
 }
 
-func (l *lru) Put(k, v string) {
+func (l *lru) Put(k string, v *redirect) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// found from cache
-	i := &item{k, v}
+	i := &item{k: k, v: v}
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {
-			i.v = l.elems.Remove(e).(*item).v
+			l.elems.Remove(e)
 			l.elems.PushFront(i)
 			return
 		}
@@ -99,5 +97,4 @@ func (l *lru) Put(k, v string) {
 	} else {
 		l.size++
 	}
-	return
 }

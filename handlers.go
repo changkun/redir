@@ -20,11 +20,13 @@ type server struct {
 
 var (
 	xTmpl     *template.Template
+	sTmpl     *template.Template
 	statsTmpl *template.Template
 )
 
 func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
+	sTmpl = template.Must(template.New("stmpl").Parse(stmpl))
 
 	db, err := newDB(conf.Store)
 	if err != nil {
@@ -143,4 +145,11 @@ const xtmpl = `<!DOCTYPE html>
 </head><body>
 Redirecting to <a href="https://pkg.go.dev/{{.ImportRoot}}{{.Suffix}}">pkg.go.dev/{{.ImportRoot}}{{.Suffix}}</a>...
 <script async src="//changkun.de/urlstat/client.js"></script>
+</body></html>`
+
+const stmpl = `<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head><body>
+The link will be accessible starts from {{.ValidFrom}}.
 </body></html>`

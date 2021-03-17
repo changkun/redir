@@ -18,6 +18,56 @@ Index page at: [changkun.de/s](https://changkun.de/s).
 ## CLI Usage
 
 ```
+$ redir
+
+usage: redir [-s] [-f <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+options:
+  -a string
+        Alias for a new link
+  -f string
+        Import aliases from a YAML file
+  -l string
+        Actual link for the alias, optional for delete/fetch
+  -op string
+        Operators, create/update/delete/fetch (default "create")
+  -p    The link is private and will not be listed in the index page, avaliable for operator create/update
+  -s    Run redir server
+  -vt string
+        the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05Z07:00. Avaliable for operator create/update (default "2006-01-02T15:04:05Z07:00")
+
+examples:
+redir -s
+        Run the redir server
+
+redir -f ./import.yml
+        Import aliases from a file
+
+redir -a alias -l link
+        Allocate new short link if possible, e.g.
+        $ redir -a changkun -l https://changkun.de
+
+redir -l link
+        Allocate a random alias for the given link if possible
+        $ redir -l https://changkun.de
+
+redir -op fetch -a alias
+        Fetch alias information
+        $ redir -op fetch -a changkun
+
+redir -a alias -l link -p
+        The alias will not be listed in the index page
+        $ redir -op update -a changkun -l https://blog.changkun.de -p
+
+redir -a alias -l link -vt 2022-01-01T00:00:00Z08:00
+        The alias will be accessible starts from 2022-01-01T00:00:00Z08:00.
+        $ redir -op update -a changkun -l https://blog.changkun.de -p -vt 2022-01-01T00:00:00Z08:00
+
+redir -op delete -a alias
+        Delete the alias from database
+        $ redir -op delete -a changkun
+```
+
+```
 $ redir -a changkun -l https://changkun.de
 $ redir -l https://changkun.de
 $ redir -f import.yml
@@ -49,7 +99,6 @@ The [default configuration](./config.yml) is embedded into the binary.
 Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
 
 ## Troubleshooting regarding Private Vanity URL Imports
-
 
 
 ```
