@@ -15,26 +15,47 @@ import (
 )
 
 var (
-	daemon   = flag.Bool("s", false, "run redir service")
-	fromfile = flag.String("f", "", "import aliases from a YAML file")
-	operate  = flag.String("op", "create", "operators, create/update/delete/fetch")
-	alias    = flag.String("a", "", "alias for a new link")
-	link     = flag.String("l", "", "actual link for the alias, optional for delete/fetch")
+	daemon   = flag.Bool("s", false, "Run redir server")
+	fromfile = flag.String("f", "", "Import aliases from a YAML file")
+	operate  = flag.String("op", "create", "Operators, create/update/delete/fetch")
+	alias    = flag.String("a", "", "Alias for a new link")
+	link     = flag.String("l", "", "Actual link for the alias, optional for delete/fetch")
+	private  = flag.Bool("p", false, "The link is private and will not be listed in the index page, avaliable for operator create/update")
+	validt   = flag.String("vt", "2006-01-02T15:04:05+00:00", "the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update")
 )
 
 func usage() {
 	fmt.Fprintf(os.Stderr,
-		`usage: redir [-s] [-f <file>] [-op <operator> -a <alias> -l <link>]
+		`usage: redir [-s] [-f <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
 options:
 `)
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, `
 examples:
-redir -s                  run the redir service
-redir -f ./import.yml     import aliases from a file
-redir -a alias -l link    allocate new short link if possible
-redir -l link             allocate a random alias for the given link if possible
-redir -op fetch -a alias  fetch alias information
+redir -s
+	Run the redir server
+
+redir -f ./import.yml
+	Import aliases from a file
+
+redir -a changkun -l https://changkun.de
+	Allocate new short link if possible
+
+redir -l https://changkun.de
+	Allocate a random alias for the given link if possible
+
+redir -op fetch -a changkun
+	Fetch alias information
+
+redir -op update -a changkun -l https://blog.changkun.de -p
+	The alias will not be listed in the index page
+	$ redir -op update -a changkun -l https://blog.changkun.de -p
+
+redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
+	The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
+
+redir -op delete -a changkun
+	Delete the alias from database
 `)
 	os.Exit(2)
 }
@@ -64,6 +85,7 @@ func runServer() {
 	if err := http.ListenAndServe(conf.Addr, nil); err != nil {
 		log.Printf("ListenAndServe %s: %v\n", conf.Addr, err)
 	}
+	s.close()
 }
 
 func runCmd() {
@@ -95,11 +117,36 @@ func runCmd() {
 
 	done := make(chan bool, 1)
 	go func() {
-		err := shortCmd(ctx, op(*operate), *alias, *link)
+		defer func() {
+			done <- true
+		}()
+
+		kind := kindShort
+		if *alias == "" {
+			kind = kindRandom
+			// This might conflict with existing ones, it should be fine
+			// at the moment, the user of redir can always the command twice.
+			if conf.R.Length <= 0 {
+				conf.R.Length = 6
+			}
+			*alias = randstr(conf.R.Length)
+		}
+
+		t, err := time.Parse(time.RFC3339, *validt)
+		if err != nil {
+			return
+		}
+
+		err = shortCmd(ctx, op(*operate), &redirect{
+			Alias:     *alias,
+			Kind:      kind,
+			URL:       *link,
+			Private:   *private,
+			ValidFrom: t.UTC(),
+		})
 		if err != nil {
 			log.Println(err)
 		}
-		done <- true
 	}()
 
 	select {

@@ -6,12 +6,14 @@ package main
 
 import (
 	"math/rand"
+	"reflect"
 	"testing"
+	"time"
 )
 
 func TestLRU(t *testing.T) {
 	l := newLRU(false)
-	l.cap = 2 // for testing
+	l.cap = 2 // limit the capacity for testing
 
 	if _, ok := l.Get("a"); ok {
 		t.Fatalf("Get value from empty LRU")
@@ -20,28 +22,48 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 0, got %v", l.Len())
 	}
 
-	l.Put("a", "1") // a
-	v, ok := l.Get("a")
-	if !ok { // a -> b
+	r := &redirect{
+		Alias:     "a",
+		Kind:      kindShort,
+		URL:       "1",
+		Private:   false,
+		ValidFrom: time.Now(),
+	}
+	l.Put("a", r)
+	_, ok := l.Get("a")
+	if !ok {
 		t.Fatalf("Get value from LRU found nothing")
 	}
 	if l.Len() != 1 {
 		t.Fatalf("wrong size, want 1, got %v", l.Len())
 	}
 
-	l.Put("b", "2") // b -> a
-	v, ok = l.Get("a")
+	l.Put("b", &redirect{
+		Alias:     "b",
+		Kind:      kindShort,
+		URL:       "2",
+		Private:   false,
+		ValidFrom: time.Now(),
+	})
+	v, ok := l.Get("a")
 	if !ok { // a -> b
 		t.Fatalf("Get value after Put from LRU found nothing")
 	}
-	if v != "1" {
-		t.Fatalf("Get value from LRU want 1 got %v", v)
+	if !reflect.DeepEqual(r, v) {
+		t.Fatalf("Get value from LRU want %v got %v", r, v)
 	}
 	if l.Len() != 2 {
 		t.Fatalf("wrong size, want 2, got %v", l.Len())
 	}
 
-	l.Put("c", "3") // c -> a
+	r = &redirect{
+		Alias:     "c",
+		Kind:      kindShort,
+		URL:       "3",
+		Private:   false,
+		ValidFrom: time.Now(),
+	}
+	l.Put("c", r)
 	_, ok = l.Get("b")
 	if ok {
 		t.Fatalf("Get value success meaning LRU incorrect")
@@ -50,7 +72,7 @@ func TestLRU(t *testing.T) {
 	if !ok {
 		t.Fatalf("Get value fail meaning LRU incorrect")
 	}
-	if v != "3" {
+	if !reflect.DeepEqual(v, r) {
 		t.Fatalf("Get value from LRU want 3 got %v", v)
 	}
 	if l.Len() != 2 {
@@ -61,16 +83,43 @@ func TestLRU(t *testing.T) {
 	if l.Len() != 0 {
 		t.Fatalf("wrong size, want 0, got %v", l.Len())
 	}
-	l.Put("a", "1")
-	l.Put("b", "1")
-	l.Put("c", "1")
-	l.Put("a", "1")
+
+	tt := time.Now().UTC()
+	l.Put("a", &redirect{
+		Alias:     "a",
+		Kind:      kindShort,
+		URL:       "1",
+		Private:   false,
+		ValidFrom: tt,
+	})
+	l.Put("b", &redirect{
+		Alias:     "b",
+		Kind:      kindShort,
+		URL:       "2",
+		Private:   false,
+		ValidFrom: tt,
+	})
+	l.Put("c", &redirect{
+		Alias:     "c",
+		Kind:      kindShort,
+		URL:       "3",
+		Private:   false,
+		ValidFrom: tt,
+	})
+	rr := &redirect{
+		Alias:     "a",
+		Kind:      kindShort,
+		URL:       "2",
+		Private:   false,
+		ValidFrom: time.Now().UTC(),
+	}
+	l.Put("a", rr)
 	v, ok = l.Get("a")
-	if !ok { // a
+	if !ok {
 		t.Fatalf("Get value from LRU found nothing")
 	}
-	if v != "1" {
-		t.Fatalf("Get value from LRU want 1 got %v", v)
+	if !reflect.DeepEqual(rr, v) {
+		t.Fatalf("Get value from LRU want %+v got %+v", rr, v)
 	}
 	if l.Len() != 2 {
 		t.Fatalf("wrong size, want 2, got %v", l.Len())
@@ -88,7 +137,15 @@ func rands() string {
 
 func BenchmarkLRU(b *testing.B) {
 	l := newLRU(false)
-	l.Put("a", "1")
+
+	r := &redirect{
+		Alias:     "a",
+		Kind:      kindShort,
+		URL:       "1",
+		Private:   false,
+		ValidFrom: time.Now(),
+	}
+	l.Put("a", r)
 	b.Run("Get", func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
@@ -99,7 +156,14 @@ func BenchmarkLRU(b *testing.B) {
 	b.Run("Put-Same", func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			// each goroutine put its own k/v
-			k, v := rands(), rands()
+			k := rands()
+			v := &redirect{
+				Alias:     k,
+				Kind:      kindShort,
+				URL:       rands(),
+				Private:   false,
+				ValidFrom: time.Now(),
+			}
 			for pb.Next() {
 				l.Put(k, v)
 			}
@@ -111,8 +175,16 @@ func BenchmarkLRU(b *testing.B) {
 	b.Run("Put-Different", func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
+				k := rands()
+				v := &redirect{
+					Alias:     k,
+					Kind:      kindShort,
+					URL:       rands(),
+					Private:   false,
+					ValidFrom: time.Now(),
+				}
 				// each put has a different k/v
-				l.Put(rands(), rands())
+				l.Put(k, v)
 			}
 		})
 	})

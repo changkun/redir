@@ -1,0 +1,11 @@
+---
+short:
+  changkun:
+    url: https://changkun.de
+    valid_from: 2021-03-17T13:55:00+01:00
+  any:
+    private: true
+    url: https://changkun.de
+random:
+  - url: https://to.what.ever
+    valid_from: 2022-01-01T00:00:00-08:00

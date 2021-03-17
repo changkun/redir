@@ -42,7 +42,15 @@ func TestUpdateAlias(t *testing.T) {
 	ctx := context.Background()
 	s := prepare(ctx, t)
 
-	r, err := s.UpdateAlias(ctx, kalias, want)
+	err := s.UpdateAlias(ctx, &redirect{
+		Alias: kalias,
+		URL:   want,
+	})
+	if err != nil {
+		t.Fatalf("UpdateAlias failed with err: %v", err)
+	}
+
+	r, err := s.FetchAlias(ctx, kalias)
 	if err != nil {
 		t.Fatalf("UpdateAlias failed with err: %v", err)
 	}
