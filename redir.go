@@ -21,7 +21,7 @@ var (
 	alias    = flag.String("a", "", "Alias for a new link")
 	link     = flag.String("l", "", "Actual link for the alias, optional for delete/fetch")
 	private  = flag.Bool("p", false, "The link is private and will not be listed in the index page, avaliable for operator create/update")
-	validt   = flag.String("vt", "2006-01-02T15:04:05+00:00", "the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update")
+	validt   = flag.String("vt", "", "the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update")
 )
 
 func usage() {
@@ -117,9 +117,7 @@ func runCmd() {
 
 	done := make(chan bool, 1)
 	go func() {
-		defer func() {
-			done <- true
-		}()
+		defer func() { done <- true }()
 
 		kind := kindShort
 		if *alias == "" {

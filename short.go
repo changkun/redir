@@ -160,6 +160,27 @@ func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
 		}
 		log.Printf("%s%s%s\n", conf.Host, prefix, r.Alias)
 	case opUpdate:
+		var rr *redirect
+
+		// fetch the old values if possible, we don't care
+		// if here returns an error.
+		rr, err = s.FetchAlias(ctx, r.Alias)
+		if err == nil {
+			// use old values if not presents
+			if r.URL == "" {
+				r.URL = rr.URL
+			}
+			tt := time.Time{}
+			if r.ValidFrom == tt {
+				r.ValidFrom = rr.ValidFrom
+			}
+			if rr.Kind != r.Kind {
+				r.Kind = rr.Kind
+			}
+		}
+		err = nil
+
+		// do update
 		err = s.UpdateAlias(ctx, r)
 		if err != nil {
 			return

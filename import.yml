@@ -2,7 +2,7 @@
 short:
   changkun:
     url: https://changkun.de
-    valid_from: 2021-03-17T13:55:00+01:00
+    valid_from: 2021-03-19T11:08:00+01:00
   any:
     private: true
     url: https://changkun.de
