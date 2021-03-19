@@ -12,11 +12,15 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"changkun.de/x/redir/internal/cache"
+	"changkun.de/x/redir/internal/db"
+	"changkun.de/x/redir/internal/models"
 )
 
 type server struct {
-	db    *database
-	cache *lru
+	db    *db.Store
+	cache *cache.LRU
 }
 
 var (
@@ -36,13 +40,13 @@ func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
 	sTmpl = template.Must(template.New("stmpl").Parse(stmpl))
 
-	db, err := newDB(conf.Store)
+	db, err := db.NewStore(conf.Store)
 	if err != nil {
 		log.Fatalf("cannot establish connection to database: %v", err)
 	}
 	return &server{
 		db:    db,
-		cache: newLRU(true),
+		cache: cache.NewLRU(true),
 	}
 }
 
@@ -61,8 +65,9 @@ func (s *server) registerHandler() {
 	// delete: POST /s {action: "delete", alias: "xxx"}
 
 	// short redirector
-	http.Handle(conf.S.Prefix, l(s.shortHandler(kindShort)))
-	http.Handle(conf.R.Prefix, l(s.shortHandler(kindRandom)))
+	http.Handle(conf.S.Prefix, l(s.shortHandler(models.KindShort)))
+	http.Handle(conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+
 	// repo redirector
 	http.Handle(conf.X.Prefix, l(s.xHandler()))
 }

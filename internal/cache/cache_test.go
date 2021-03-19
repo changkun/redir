@@ -2,17 +2,19 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package cache
 
 import (
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"changkun.de/x/redir/internal/models"
 )
 
 func TestLRU(t *testing.T) {
-	l := newLRU(false)
+	l := NewLRU(false)
 	l.cap = 2 // limit the capacity for testing
 
 	if _, ok := l.Get("a"); ok {
@@ -22,9 +24,9 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 0, got %v", l.Len())
 	}
 
-	r := &redirect{
+	r := &models.Redirect{
 		Alias:     "a",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -38,9 +40,9 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 1, got %v", l.Len())
 	}
 
-	l.Put("b", &redirect{
+	l.Put("b", &models.Redirect{
 		Alias:     "b",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -56,9 +58,9 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 2, got %v", l.Len())
 	}
 
-	r = &redirect{
+	r = &models.Redirect{
 		Alias:     "c",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "3",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -85,30 +87,30 @@ func TestLRU(t *testing.T) {
 	}
 
 	tt := time.Now().UTC()
-	l.Put("a", &redirect{
+	l.Put("a", &models.Redirect{
 		Alias:     "a",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("b", &redirect{
+	l.Put("b", &models.Redirect{
 		Alias:     "b",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("c", &redirect{
+	l.Put("c", &models.Redirect{
 		Alias:     "c",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "3",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	rr := &redirect{
+	rr := &models.Redirect{
 		Alias:     "a",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: time.Now().UTC(),
@@ -136,11 +138,11 @@ func rands() string {
 }
 
 func BenchmarkLRU(b *testing.B) {
-	l := newLRU(false)
+	l := NewLRU(false)
 
-	r := &redirect{
+	r := &models.Redirect{
 		Alias:     "a",
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -157,9 +159,9 @@ func BenchmarkLRU(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			// each goroutine put its own k/v
 			k := rands()
-			v := &redirect{
+			v := &models.Redirect{
 				Alias:     k,
-				Kind:      kindShort,
+				Kind:      models.KindShort,
 				URL:       rands(),
 				Private:   false,
 				ValidFrom: time.Now(),
@@ -176,9 +178,9 @@ func BenchmarkLRU(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				k := rands()
-				v := &redirect{
+				v := &models.Redirect{
 					Alias:     k,
-					Kind:      kindShort,
+					Kind:      models.KindShort,
 					URL:       rands(),
 					Private:   false,
 					ValidFrom: time.Now(),

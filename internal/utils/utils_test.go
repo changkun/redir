@@ -1,17 +1,19 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package utils_test
 
 import (
 	"strings"
 	"testing"
+
+	"changkun.de/x/redir/internal/utils"
 )
 
 func TestRandomString(t *testing.T) {
-	s1 := randstr(12)
-	s2 := randstr(12)
+	s1 := utils.Randstr(12)
+	s2 := utils.Randstr(12)
 	if len(s1) != 12 || len(s2) != 12 {
 		t.Fatalf("want 12 chars, got: %v, %v", len(s1), len(s2))
 	}

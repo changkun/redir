@@ -17,6 +17,9 @@ import (
 	"strings"
 	"time"
 
+	"changkun.de/x/redir/internal/db"
+	"changkun.de/x/redir/internal/models"
+	"changkun.de/x/redir/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -78,10 +81,10 @@ func importFile(fname string) {
 			t = time.Now().UTC()
 		}
 
-		r := &redirect{
+		r := &models.Redirect{
 			Alias:     alias,
 			URL:       info.URL,
-			Kind:      kindShort,
+			Kind:      models.KindShort,
 			Private:   info.Private,
 			ValidFrom: t,
 		}
@@ -105,12 +108,12 @@ func importFile(fname string) {
 		if conf.R.Length <= 0 {
 			conf.R.Length = 6
 		}
-		alias := randstr(conf.R.Length)
+		alias := utils.Randstr(conf.R.Length)
 
-		r := &redirect{
+		r := &models.Redirect{
 			Alias:     alias,
 			URL:       info.URL,
-			Kind:      kindRandom,
+			Kind:      models.KindRandom,
 			Private:   info.Private,
 			ValidFrom: t,
 		}
@@ -129,8 +132,8 @@ func importFile(fname string) {
 }
 
 // shortCmd processes the given alias and link with a specified op.
-func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
-	s, err := newDB(conf.Store)
+func shortCmd(ctx context.Context, operate op, r *models.Redirect) (err error) {
+	s, err := db.NewStore(conf.Store)
 	if err != nil {
 		err = fmt.Errorf("cannot create a new alias: %w", err)
 		return
@@ -153,14 +156,14 @@ func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
 
 		var prefix string
 		switch r.Kind {
-		case kindShort:
+		case models.KindShort:
 			prefix = conf.S.Prefix
-		case kindRandom:
+		case models.KindRandom:
 			prefix = conf.R.Prefix
 		}
 		log.Printf("%s%s%s\n", conf.Host, prefix, r.Alias)
 	case opUpdate:
-		var rr *redirect
+		var rr *models.Redirect
 
 		// fetch the old values if possible, we don't care
 		// if here returns an error.
@@ -193,7 +196,7 @@ func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
 		}
 		log.Printf("alias %v has been deleted.\n", r.Alias)
 	case opFetch:
-		var r *redirect
+		var r *models.Redirect
 		r, err = s.FetchAlias(ctx, r.Alias)
 		if err != nil {
 			return
@@ -205,7 +208,7 @@ func shortCmd(ctx context.Context, operate op, r *redirect) (err error) {
 
 // shortHandler redirects the current request to a known link if the alias is
 // found in the redir store.
-func (s *server) shortHandler(kind aliasKind) http.Handler {
+func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -223,9 +226,9 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 		// statistic page
 		var prefix string
 		switch kind {
-		case kindShort:
+		case models.KindShort:
 			prefix = conf.S.Prefix
-		case kindRandom:
+		case models.KindRandom:
 			prefix = conf.R.Prefix
 		}
 
@@ -265,7 +268,7 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			err := s.db.RecordVisit(ctx, &visit{
+			err := s.db.RecordVisit(ctx, &models.Visit{
 				Alias:   alias,
 				Kind:    kind,
 				IP:      readIP(r),
@@ -281,7 +284,7 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 }
 
 // checkdb checks whether the given alias is exsited in the redir database
-func (s *server) checkdb(ctx context.Context, alias string) (*redirect, error) {
+func (s *server) checkdb(ctx context.Context, alias string) (*models.Redirect, error) {
 	a, err := s.db.FetchAlias(ctx, alias)
 	if err != nil {
 		return nil, err
@@ -291,7 +294,7 @@ func (s *server) checkdb(ctx context.Context, alias string) (*redirect, error) {
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
 // then creates a new alias and returns url of the vcs repository.
-func (s *server) checkvcs(ctx context.Context, alias string) (*redirect, error) {
+func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redirect, error) {
 
 	// construct the try path and make the request to vcs
 	repoPath := conf.X.RepoPath
@@ -315,16 +318,16 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*redirect, error) 
 	}
 
 	// store such a try path
-	r := &redirect{
+	r := &models.Redirect{
 		Alias:     alias,
-		Kind:      kindShort,
+		Kind:      models.KindShort,
 		URL:       tryPath,
 		Private:   false,
 		ValidFrom: time.Now().UTC(),
 	}
 	err = s.db.StoreAlias(ctx, r)
 	if err != nil {
-		if errors.Is(err, errExistedAlias) {
+		if errors.Is(err, db.ErrExistedAlias) {
 			return s.checkdb(ctx, alias)
 		}
 		return nil, err
@@ -339,10 +342,10 @@ type records struct {
 	Title   string
 	Host    string
 	Prefix  string
-	Records []record
+	Records []models.VisitRecord
 }
 
-func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
+func (s *server) stats(ctx context.Context, kind models.AliasKind, w http.ResponseWriter, r *http.Request) error {
 	if len(r.URL.Query()) != 0 {
 		err := s.statData(ctx, w, r, kind)
 		if !errors.Is(err, errInvalidStatParam) {
@@ -355,9 +358,9 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 
 	var prefix string
 	switch kind {
-	case kindShort:
+	case models.KindShort:
 		prefix = conf.S.Prefix
-	case kindRandom:
+	case models.KindRandom:
 		prefix = conf.R.Prefix
 	}
 
@@ -380,7 +383,7 @@ func (s *server) statData(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
-	k aliasKind,
+	k models.AliasKind,
 ) (retErr error) {
 	defer func() {
 		if retErr != nil {
