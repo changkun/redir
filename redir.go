@@ -1,4 +1,4 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
@@ -12,6 +12,9 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"changkun.de/x/redir/internal/models"
+	"changkun.de/x/redir/internal/utils"
 )
 
 var (
@@ -119,15 +122,15 @@ func runCmd() {
 	go func() {
 		defer func() { done <- true }()
 
-		kind := kindShort
+		kind := models.KindShort
 		if *alias == "" {
-			kind = kindRandom
+			kind = models.KindRandom
 			// This might conflict with existing ones, it should be fine
 			// at the moment, the user of redir can always the command twice.
 			if conf.R.Length <= 0 {
 				conf.R.Length = 6
 			}
-			*alias = randstr(conf.R.Length)
+			*alias = utils.Randstr(conf.R.Length)
 		}
 
 		t, err := time.Parse(time.RFC3339, *validt)
@@ -135,7 +138,7 @@ func runCmd() {
 			return
 		}
 
-		err = shortCmd(ctx, op(*operate), &redirect{
+		err = shortCmd(ctx, op(*operate), &models.Redirect{
 			Alias:     *alias,
 			Kind:      kind,
 			URL:       *link,

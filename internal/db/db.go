@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package db
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"changkun.de/x/redir/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,34 +18,8 @@ import (
 )
 
 var (
-	errExistedAlias = errors.New("alias is existed")
+	ErrExistedAlias = errors.New("alias is existed")
 )
-
-type aliasKind int
-
-const (
-	kindShort aliasKind = iota
-	kindRandom
-)
-
-// redirect records a kind of alias and its correlated link.
-type redirect struct {
-	Alias     string    `json:"alias"      bson:"alias"`
-	Kind      aliasKind `json:"kind"       bson:"kind"`
-	URL       string    `json:"url"        bson:"url"`
-	Private   bool      `json:"private"    bson:"private"`
-	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
-}
-
-// visit indicates an record of visit pattern.
-type visit struct {
-	Alias   string    `json:"alias"   bson:"alias"`
-	Kind    aliasKind `json:"kind"    bson:"kind"`
-	IP      string    `json:"ip"      bson:"ip"`
-	UA      string    `json:"ua"      bson:"ua"`
-	Referer string    `json:"referer" bson:"referer"`
-	Time    time.Time `json:"time"    bson:"time"`
-}
 
 const (
 	dbname   = "redir"
@@ -52,21 +27,22 @@ const (
 	colvisit = "visit"
 )
 
-type database struct {
+type Store struct {
 	cli *mongo.Client
 }
 
-func newDB(uri string) (*database, error) {
+// NewStore parses the given URI and returns the database instantiation.
+func NewStore(uri string) (*Store, error) {
 	// initialize database connection
 	db, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}
 
-	return &database{db}, nil
+	return &Store{db}, nil
 }
 
-func (db *database) Close() (err error) {
+func (db *Store) Close() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
@@ -78,7 +54,7 @@ func (db *database) Close() (err error) {
 }
 
 // StoreAlias stores a given short alias with the given link if not exists
-func (db *database) StoreAlias(ctx context.Context, r *redirect) (err error) {
+func (db *Store) StoreAlias(ctx context.Context, r *models.Redirect) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	opts := options.Update().SetUpsert(true)
@@ -93,10 +69,10 @@ func (db *database) StoreAlias(ctx context.Context, r *redirect) (err error) {
 }
 
 // UpdateAlias updates the link of a given alias
-func (db *database) UpdateAlias(ctx context.Context, r *redirect) error {
+func (db *Store) UpdateAlias(ctx context.Context, r *models.Redirect) error {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	var ret redirect
+	var ret models.Redirect
 	err := col.FindOneAndUpdate(ctx,
 		bson.M{"alias": r.Alias},
 		bson.M{"$set": bson.M{
@@ -113,7 +89,7 @@ func (db *database) UpdateAlias(ctx context.Context, r *redirect) error {
 }
 
 // Delete deletes a given short alias if exists
-func (db *database) DeleteAlias(ctx context.Context, a string) (err error) {
+func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	_, err = col.DeleteMany(ctx, bson.M{"alias": a})
@@ -125,10 +101,10 @@ func (db *database) DeleteAlias(ctx context.Context, a string) (err error) {
 }
 
 // FetchAlias reads a given alias and returns the associated link
-func (db *database) FetchAlias(ctx context.Context, a string) (*redirect, error) {
+func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	var r redirect
+	var r models.Redirect
 	err := col.FindOne(ctx, bson.M{"alias": a}).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find alias %s: %v", a, err)
@@ -142,7 +118,13 @@ type refstat struct {
 }
 
 // CountReferer fetches and counts all referers of a given alias
-func (db *database) CountReferer(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]refstat, error) {
+func (db *Store) CountReferer(
+	ctx context.Context,
+	a string,
+	k models.AliasKind,
+	start, end time.Time,
+) ([]refstat, error) {
+
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
@@ -219,7 +201,13 @@ type uastat struct {
 	Count int64  `json:"count" bson:"count"`
 }
 
-func (db *database) CountUA(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]uastat, error) {
+func (db *Store) CountUA(
+	ctx context.Context,
+	a string,
+	k models.AliasKind,
+	start, end time.Time,
+) ([]uastat, error) {
+
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
@@ -296,7 +284,13 @@ type timehist struct {
 	Count int       `bson:"count" json:"count"`
 }
 
-func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, start, end time.Time) ([]timehist, error) {
+func (db *Store) CountVisitHist(
+	ctx context.Context,
+	a string,
+	k models.AliasKind,
+	start, end time.Time,
+) ([]timehist, error) {
+
 	// db.links.aggregate([
 	//     {$match: {kind: 0, alias: 'blog'}},
 	//     {'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
@@ -421,7 +415,7 @@ func (db *database) CountVisitHist(ctx context.Context, a string, k aliasKind, s
 	return results, nil
 }
 
-func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
+func (db *Store) RecordVisit(ctx context.Context, v *models.Visit) (err error) {
 	col := db.cli.Database(dbname).Collection(colvisit)
 
 	_, err = col.InsertOne(ctx, v)
@@ -432,14 +426,10 @@ func (db *database) RecordVisit(ctx context.Context, v *visit) (err error) {
 	return
 }
 
-type record struct {
-	Alias string `bson:"alias"`
-	UV    int64  `bson:"uv"`
-	PV    int64  `bson:"pv"`
-}
+// VisitRecord represents the visit record of an alias.
 
 // CountVisit counts the PV/UV of aliases of a given kind
-func (db *database) CountVisit(ctx context.Context, kind aliasKind) (rs []record, err error) {
+func (db *Store) CountVisit(ctx context.Context, kind models.AliasKind) (rs []models.VisitRecord, err error) {
 	// uv based on number of ip, this is not accurate since the number will be
 	// smaller than the actual.
 	// raw query:
@@ -498,7 +488,7 @@ func (db *database) CountVisit(ctx context.Context, kind aliasKind) (rs []record
 	}
 	defer cur.Close(ctx)
 
-	var results []record
+	var results []models.VisitRecord
 	if err := cur.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to fetch visit results: %w", err)
 	}

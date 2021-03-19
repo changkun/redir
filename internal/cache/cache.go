@@ -1,13 +1,15 @@
-// Copyright 2020 Changkun Ou. All rights reserved.
+// Copyright 2021 Changkun Ou. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package cache
 
 import (
 	"container/list"
 	"sync"
 	"time"
+
+	"changkun.de/x/redir/internal/models"
 )
 
 type item struct {
@@ -15,8 +17,8 @@ type item struct {
 	v interface{}
 }
 
-// lru is a naive thread-safe lru cache
-type lru struct {
+// LRU is a naive thread-safe LRU cache
+type LRU struct {
 	cap   uint
 	size  uint
 	elems *list.List // of redirect
@@ -24,8 +26,8 @@ type lru struct {
 	mu sync.RWMutex
 }
 
-func newLRU(doexpire bool) *lru {
-	l := &lru{
+func NewLRU(doexpire bool) *LRU {
+	l := &LRU{
 		cap:   32, // could do it with memory quota
 		size:  0,
 		elems: list.New(),
@@ -40,14 +42,14 @@ func newLRU(doexpire bool) *lru {
 // clear clears the lru after a while, this is just a dirty
 // solution to prevent if the database is updated but lru is
 // not synced.
-func (l *lru) clear() {
+func (l *LRU) clear() {
 	t := time.NewTicker(time.Minute * 5)
 	for range t.C {
 		l.flush()
 	}
 }
 
-func (l *lru) flush() {
+func (l *LRU) flush() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -57,26 +59,26 @@ func (l *lru) flush() {
 	l.size = 0
 }
 
-func (l *lru) Len() uint {
+func (l *LRU) Len() uint {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.size
 }
 
-func (l *lru) Get(k string) (*redirect, bool) {
+func (l *LRU) Get(k string) (*models.Redirect, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {
 			l.elems.MoveToFront(e)
-			return e.Value.(*item).v.(*redirect), true
+			return e.Value.(*item).v.(*models.Redirect), true
 		}
 	}
 	return nil, false
 }
 
-func (l *lru) Put(k string, v *redirect) {
+func (l *LRU) Put(k string, v *models.Redirect) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

@@ -2,24 +2,27 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package db_test
 
 import (
 	"context"
 	"testing"
+
+	"changkun.de/x/redir/internal/db"
+	"changkun.de/x/redir/internal/models"
 )
 
 const kalias = "alias"
 
-func prepare(ctx context.Context, t *testing.T) *database {
-	s, err := newDB("mongodb://0.0.0.0:27017")
+func prepare(ctx context.Context, t *testing.T) *db.Store {
+	s, err := db.NewStore("mongodb://0.0.0.0:27017")
 	if err != nil {
 		t.Fatalf("cannot connect to data store")
 	}
 
-	err = s.StoreAlias(ctx, &redirect{
+	err = s.StoreAlias(ctx, &models.Redirect{
 		Alias:   kalias,
-		Kind:    kindShort,
+		Kind:    models.KindShort,
 		URL:     "link",
 		Private: false,
 	})
@@ -42,7 +45,7 @@ func TestUpdateAlias(t *testing.T) {
 	ctx := context.Background()
 	s := prepare(ctx, t)
 
-	err := s.UpdateAlias(ctx, &redirect{
+	err := s.UpdateAlias(ctx, &models.Redirect{
 		Alias: kalias,
 		URL:   want,
 	})

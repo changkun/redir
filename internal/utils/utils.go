@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package utils
 
 import (
 	"math/rand"
@@ -14,8 +14,8 @@ const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 var r = newRand()
 
-// randstr generates a random string
-func randstr(n int) string {
+// Randstr generates a random string
+func Randstr(n int) string {
 	var str string
 	length := len(alphanum)
 	for i := 0; i < n; i++ {
