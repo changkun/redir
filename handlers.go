@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"html/template"
 	"log"
 	"net"
@@ -17,6 +18,13 @@ type server struct {
 	db    *database
 	cache *lru
 }
+
+var (
+	//go:embed public/x.html
+	xtmpl string
+	//go:embed public/wait.html
+	stmpl string
+)
 
 var (
 	xTmpl     *template.Template
@@ -136,20 +144,3 @@ func (s *server) xHandler() http.Handler {
 		}
 	})
 }
-
-const xtmpl = `<!DOCTYPE html>
-<html><head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-<meta name="go-import" content="{{.ImportRoot}} {{.VCS}} {{.VCSRoot}}">
-<meta http-equiv="refresh" content="0; url=https://pkg.go.dev/{{.ImportRoot}}{{.Suffix}}">
-</head><body>
-Redirecting to <a href="https://pkg.go.dev/{{.ImportRoot}}{{.Suffix}}">pkg.go.dev/{{.ImportRoot}}{{.Suffix}}</a>...
-<script async src="//changkun.de/urlstat/client.js"></script>
-</body></html>`
-
-const stmpl = `<!DOCTYPE html>
-<html><head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-</head><body>
-The link will be accessible starts from {{.ValidFrom}}.
-</body></html>`

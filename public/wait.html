@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<style>
+html, body {
+    height: 100%;
+    background-color: #333;
+}
+body {
+    margin: 0;
+}
+.flex-container {
+    user-select: none;
+    height: 90%;
+    padding: 0;
+    margin: 0;
+    display: -webkit-box;
+    display: -moz-box;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.row {
+    width: auto;
+}
+.flex-item {
+    color: #aaa;
+    padding: 5px;
+    height: 20px;
+    margin: 10px;
+    line-height: 20px;
+    font-weight: bold;
+    font-size: 2em;
+    text-align: center;
+}
+footer {
+    user-select: none;
+    text-align: center;
+    font-size: 14px;
+    flex: 0 0 auto;
+    color: #aaa;
+    padding: 24px 50px;
+}
+a {
+    text-decoration: none;
+    color: rgba(0, 128, 255, 255);
+}
+#countdown {
+    font-size: 5em;
+}
+</style>
+</head><body>
+
+<div class="flex-container">
+    <div class="row"> 
+        <div class="flex-item">The link will be available in:</div></br></br>
+        <div id="countdown" class="flex-item"></div></br></br>
+        <div class="flex-item">at</div></br></br>
+        <div id="absolute-time" class="flex-item"></div>
+    </div>
+</div>
+<footer>redir &copy; 2021 Created by <a href="https://changkun.de">Changkun Ou</a>. Open sourced under MIT license at <a href="https://changkun.de/s/redir">GitHub</a>.</footer>
+
+<script>
+const calcTime = (countDownDate) => {
+    const now = new Date().getTime()
+    const distance = countDownDate - now
+    // If the count down is finished, refresh the page
+    if (distance < 0) {
+        clearInterval(x);
+        location.reload()
+    }
+
+    const days = Math.floor(distance / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((distance % (1000 * 60)) / 1000)
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`
+}
+
+
+const validFrom = "{{.ValidFrom}}"
+const countDownDate = new Date(validFrom).getTime()
+
+const d = document.getElementById('absolute-time')
+d.textContent = new Date(validFrom)
+const c = document.getElementById("countdown")
+c.textContent = calcTime(countDownDate)
+
+
+const x = setInterval(function() {
+  c.textContent = calcTime(countDownDate);
+}, 1000);
+</script>
+</body></html>
