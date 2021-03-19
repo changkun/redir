@@ -37,34 +37,29 @@ options:
 
 examples:
 redir -s
-        Run the redir server
+	Run the redir server
 
 redir -f ./import.yml
-        Import aliases from a file
+	Import aliases from a file
 
-redir -a alias -l link
-        Allocate new short link if possible, e.g.
-        $ redir -a changkun -l https://changkun.de
+redir -a changkun -l https://changkun.de
+	Allocate new short link if possible
 
-redir -l link
-        Allocate a random alias for the given link if possible
-        $ redir -l https://changkun.de
+redir -l https://changkun.de
+	Allocate a random alias for the given link if possible
 
-redir -op fetch -a alias
-        Fetch alias information
-        $ redir -op fetch -a changkun
+redir -op fetch -a changkun
+	Fetch alias information
 
-redir -a alias -l link -p
-        The alias will not be listed in the index page
-        $ redir -op update -a changkun -l https://blog.changkun.de -p
+redir -op update -a changkun -l https://blog.changkun.de -p
+	The alias will not be listed in the index page
+	$ redir -op update -a changkun -l https://blog.changkun.de -p
 
-redir -a alias -l link -vt 2022-01-01T00:00:00Z08:00
-        The alias will be accessible starts from 2022-01-01T00:00:00Z08:00.
-        $ redir -op update -a changkun -l https://blog.changkun.de -p -vt 2022-01-01T00:00:00Z08:00
+redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
+	The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
 
-redir -op delete -a alias
-        Delete the alias from database
-        $ redir -op delete -a changkun
+redir -op delete -a changkun
+	Delete the alias from database
 ```
 
 ```
