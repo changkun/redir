@@ -7,75 +7,76 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous"></script>
 <style>
-  :root {
-    --gray-1: #202224;
-    --gray-2: #3e4042;
-    --gray-3: #555759;
-    --gray-4: #6e7072;
-    --gray-5: #848688;
-    --gray-6: #aaacae;
-    --gray-7: #c6c8ca;
-    --gray-8: #dcdee0;
-    --gray-9: #f0f1f2;
-    --gray-10: #fafafa;
-    --turq-light: #5dc9e2;
-    --turq-med: #00add8;
-    --turq-dark: #007d9c;
-    --blue: #92e1f3;
-    --green: #00a29c;
-    --pink: #ce3262;
-    --purple: #542c7d;
-    --slate: #253443;
-    --white: #fff;
-    --yellow: #fddd00;
-    --header-height: 3.5rem;
-  }
-  body {
-    margin: 0;
-    font-family: Roboto, sans-serif;
-    background-color: var(--gray-1);
-    color: var(--gray-6);
-  }
-  body {
-    background-color: var(--gray-2);
-  }
-  a {
-    color: var(--turq-med);
-    text-decoration: none;
-  }
-  a:hover {
-    color: var(--turq-med);
-    text-decoration: none;
-  }
-  .alias-header {
-    color: var(--gray-7);
-  }
-  #app {
-    padding: 20px;
-  }
-  .accordion-button {
-    color: var(--gray-7);
-  }
-  .accordion-button:not(.collapsed) {
-    color: var(--gray-10);
-    background-color: var(--turq-dark);
-  }
-  .table-header .accordion-button:after {
-    background-image: none;
-  }
-  .accordion-body {
-    padding: 0;
-  }
-  .alias-charts {
-    width: 30%;
-    height: 500px;
-    background-color: var(--gray-2);
-    padding: 0;
-  }
-  .row {
-    margin: 10px 0;
-  }
-  </style>
+:root {
+  --gray-1: #202224;
+  --gray-2: #3e4042;
+  --gray-3: #555759;
+  --gray-4: #6e7072;
+  --gray-5: #848688;
+  --gray-6: #aaacae;
+  --gray-7: #c6c8ca;
+  --gray-8: #dcdee0;
+  --gray-9: #f0f1f2;
+  --gray-10: #fafafa;
+  --turq-light: #5dc9e2;
+  --turq-med: #00add8;
+  --turq-dark: #007d9c;
+  --blue: #92e1f3;
+  --green: #00a29c;
+  --pink: #ce3262;
+  --purple: #542c7d;
+  --slate: #253443;
+  --white: #fff;
+  --yellow: #fddd00;
+  --header-height: 3.5rem;
+}
+body {
+  margin: 0;
+  font-family: Roboto, sans-serif;
+  background-color: var(--gray-1);
+  color: var(--gray-6);
+}
+body {
+  background-color: var(--gray-2);
+}
+a {
+  color: var(--turq-med);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--turq-med);
+  text-decoration: none;
+}
+.alias-header {
+  color: var(--gray-7);
+}
+#app {
+  padding: 20px;
+}
+.accordion-button {
+  color: var(--gray-7);
+}
+.accordion-button:not(.collapsed) {
+  color: var(--gray-10);
+  background-color: var(--turq-dark);
+}
+.table-header .accordion-button:after {
+  background-image: none;
+}
+.accordion-body {
+  padding: 0;
+}
+.alias-charts {
+  width: 30%;
+  height: 500px;
+  background-color: var(--gray-2);
+  padding: 0;
+}
+.row {
+  margin: 10px 0;
+}
+</style>
+<script async src="//changkun.de/urlstat/client.js"></script>
 </head>
 <body>
 <div id="app">
@@ -108,7 +109,6 @@
   {{end}}
 </div>
 </div>
-<script async src="//changkun.de/urlstat/client.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ua-parser-js@0/dist/ua-parser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.0.2/dist/echarts.min.js"></script>
 <script>
