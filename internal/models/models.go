@@ -41,3 +41,22 @@ type VisitRecord struct {
 	UV    int64  `json:"uv"    bson:"uv"`
 	PV    int64  `json:"pv"    bson:"pv"`
 }
+
+// Referrer statistic
+type RefStat struct {
+	Referer string `json:"referer" bson:"referer"`
+	Count   int64  `json:"count"   bson:"count"`
+}
+
+// UAStat statistics
+type UAStat struct {
+	UA    string `json:"ua"    bson:"ua"`
+	Count int64  `json:"count" bson:"count"`
+}
+
+// TimeHist statistics
+type TimeHist struct {
+	Time time.Time `bson:"time" json:"time"`
+	PV   int       `bson:"pv"   json:"pv"`
+	UV   int       `bson:"uv"   json:"uv"`
+}

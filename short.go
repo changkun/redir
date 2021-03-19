@@ -336,7 +336,10 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redirect, 
 	return r, nil
 }
 
-var errInvalidStatParam = errors.New("invalid stat parameter")
+var (
+	errInvalidStatParam = errors.New("invalid stat parameter")
+	errMissingStatParam = errors.New("missing stat parameter")
+)
 
 type records struct {
 	Title   string
@@ -345,8 +348,40 @@ type records struct {
 	Records []models.VisitRecord
 }
 
+const (
+	username = "x"
+	password = "x"
+)
+
+func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("WWW-Authenticate", `Basic realm=""`)
+
+	u, p, ok := r.BasicAuth()
+	if !ok {
+		w.WriteHeader(401)
+		return errors.New("failed to parsing basic auth")
+	}
+	if u != username {
+		w.WriteHeader(401)
+		return fmt.Errorf("username is invalid: %s", u)
+	}
+	if p != password {
+		w.WriteHeader(401)
+		return fmt.Errorf("password is invalid: %s", p)
+	}
+	w.WriteHeader(200)
+	return nil
+}
+
 func (s *server) stats(ctx context.Context, kind models.AliasKind, w http.ResponseWriter, r *http.Request) error {
-	if len(r.URL.Query()) != 0 {
+	mode := r.URL.Query().Get("mode")
+	switch mode {
+	case "admin":
+		err := s.handleAuth(w, r)
+		if err != nil {
+			return err
+		}
+	case "stat":
 		err := s.statData(ctx, w, r, kind)
 		if !errors.Is(err, errInvalidStatParam) {
 			return err
@@ -394,68 +429,56 @@ func (s *server) statData(
 	params := r.URL.Query()
 	a := params.Get("a")
 	if a == "" {
-		retErr = errors.New("alias is not provided")
+		retErr = fmt.Errorf("%s: alias (a)", errMissingStatParam)
 		return
 	}
 
-	mode := params.Get("stat")
-	if mode == "" {
-		retErr = errors.New("stat mode is not provided")
+	stat := params.Get("stat")
+	if stat == "" {
+		retErr = fmt.Errorf("%s: stat mode (stat)", errMissingStatParam)
 		return
 	}
 
 	start, end, err := parseDuration(params)
 	if err != nil {
-		retErr = err
+		retErr = fmt.Errorf("%s: %v", errInvalidStatParam, err)
 		return
 	}
 
 	w.Header().Add("Content-Type", "application/json")
 
-	switch mode {
+	var results interface{}
+	switch stat {
 	case "referer":
-		referers, err := s.db.CountReferer(ctx, a, k, start, end)
+		results, err = s.db.CountReferer(ctx, a, k, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
-		b, err := json.Marshal(referers)
-		if err != nil {
-			retErr = err
-			return
-		}
-		w.Write(b)
-		return
 	case "ua":
-		referers, err := s.db.CountUA(ctx, a, k, start, end)
+		results, err = s.db.CountUA(ctx, a, k, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
-		b, err := json.Marshal(referers)
-		if err != nil {
-			retErr = err
-			return
-		}
-		w.Write(b)
-		return
 	case "time":
-		hist, err := s.db.CountVisitHist(ctx, a, k, start, end)
+		results, err = s.db.CountVisitHist(ctx, a, k, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
-		b, err := json.Marshal(hist)
-		if err != nil {
-			retErr = err
-			return
-		}
-		w.Write(b)
-		return
 	default:
-		retErr = fmt.Errorf("%s stat mode is not supported", mode)
+		retErr = fmt.Errorf("%s stat mode is not supported", stat)
 		return
 	}
+
+	b, err := json.Marshal(results)
+	if err != nil {
+		retErr = err
+		return
+	}
+	w.Write(b)
+	return
 }
 
 func parseDuration(p url.Values) (start, end time.Time, err error) {
