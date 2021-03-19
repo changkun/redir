@@ -38,6 +38,10 @@ func NewStore(uri string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}
+	err = db.Ping(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to database: %w", err)
+	}
 
 	return &Store{db}, nil
 }
@@ -112,18 +116,13 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, er
 	return &r, nil
 }
 
-type refstat struct {
-	Referer string `json:"referer" bson:"referer"`
-	Count   int64  `json:"count"   bson:"count"`
-}
-
 // CountReferer fetches and counts all referers of a given alias
 func (db *Store) CountReferer(
 	ctx context.Context,
 	a string,
 	k models.AliasKind,
 	start, end time.Time,
-) ([]refstat, error) {
+) ([]models.RefStat, error) {
 
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
@@ -188,7 +187,7 @@ func (db *Store) CountReferer(
 	}
 	defer cur.Close(ctx)
 
-	var results []refstat
+	var results []models.RefStat
 	if err := cur.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to fetch referer results: %w", err)
 	}
@@ -196,17 +195,12 @@ func (db *Store) CountReferer(
 	return results, nil
 }
 
-type uastat struct {
-	UA    string `json:"ua"    bson:"ua"`
-	Count int64  `json:"count" bson:"count"`
-}
-
 func (db *Store) CountUA(
 	ctx context.Context,
 	a string,
 	k models.AliasKind,
 	start, end time.Time,
-) ([]uastat, error) {
+) ([]models.UAStat, error) {
 
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
@@ -271,7 +265,7 @@ func (db *Store) CountUA(
 	}
 	defer cur.Close(ctx)
 
-	var results []uastat
+	var results []models.UAStat
 	if err := cur.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to fetch ua results: %w", err)
 	}
@@ -279,57 +273,66 @@ func (db *Store) CountUA(
 	return results, nil
 }
 
-type timehist struct {
-	Time  time.Time `bson:"time"  json:"time"`
-	Count int       `bson:"count" json:"count"`
-}
-
 func (db *Store) CountVisitHist(
 	ctx context.Context,
 	a string,
 	k models.AliasKind,
 	start, end time.Time,
-) ([]timehist, error) {
+) ([]models.TimeHist, error) {
 
+	// Raw query
 	// db.links.aggregate([
-	//     {$match: {kind: 0, alias: 'blog'}},
-	//     {'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
-	//     {
-	//         $group: {
-	//             _id: "$alias", time: {'$first': '$visit.time'}
-	//         },
-	//     },
-	//     {'$unwind': "$time"},
-	//     {
-	//         $project: {
-	//             "year": {$year: "$time"},
-	//             "month": {$month: "$time"},
-	//             "day": {$dayOfMonth: "$time"},
-	//             "hour": {$hour: "$time"},
-	//         },
-	//     },
-	//     {
-	//         "$group":{
-	//             "_id": {
-	//                 "year":"$year","month":"$month","day":"$day","hour":"$hour",
-	//             },
-	//             'year': {'$first': '$year'},
-	//             'month': {'$first': '$month'},
-	//             'day': {'$first': '$day'},
-	//             'hour': {'$first': '$hour'},
-	//             'count': {$sum: 1},
-	//         },
-	//     },
-	//     {
-	//         $sort: {
-	//             year: -1,
-	//             month: -1,
-	//             day: -1,
-	//             hour: -1,
-	//         },
-	//     },
+	// 	{$match: {kind: 0, alias: 'changkun'}},
+	// 	{'$lookup': {
+	// 		from: 'visit', localField: 'alias',
+	// 		foreignField: 'alias', as: 'visit'},
+	// 	},
+	// 	{
+	// 		$group: {
+	// 			_id: "$alias",
+	// 			time: {'$first': '$visit.time'},
+	// 			ip: {'$first': '$visit.ip'},
+	// 		},
+	// 	},
+	// 	{'$unwind': {path: "$time", includeArrayIndex: "idx1"}},
+	// 	{'$unwind': {path: "$ip",   includeArrayIndex: "idx2"}},
+	// 	{
+	// 		$project: {
+	// 			_id: 1,
+	// 			time: 1,
+	// 			ip:   1,
+	// 			valid: {$eq: ["$idx1", "$idx2"]},
+	// 		},
+	// 	},
+	// 	{$match: {valid: true}},
+	// 	{
+	// 		$project: {
+	// 			_id: {
+	// 				"year": {$year: "$time"},
+	// 				"month": {$month: "$time"},
+	// 				"day": {$dayOfMonth: "$time"},
+	// 				"hour": {$hour: "$time"},
+	// 			},
+	// 			"time": "$time",
+	// 			"ip": "$ip",
+	// 		},
+	// 	},
+	// 	{
+	// 		$group: {
+	// 			_id: "$_id",
+	// 			time: {$first: '$time'},
+	// 			visits: {$push: '$ip'},
+	// 			users: {$addToSet: '$ip'},
+	// 		},
+	// 	},
+	// 	{
+	// 		$project: {
+	// 			time: 1,
+	// 			pv: {$size: '$visits'},
+	// 			uv: {$size: '$users'},
+	// 		}
+	// 	}
 	// ])
-
 	col := db.cli.Database(dbname).Collection(collink)
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
@@ -359,59 +362,76 @@ func (db *Store) CountVisitHist(
 			Key: "$group", Value: bson.M{
 				"_id":  "$alias",
 				"time": bson.M{"$first": "$visit.time"},
+				"ip":   bson.M{"$first": "$visit.ip"},
 			},
 		}},
 		bson.D{primitive.E{
 			Key: "$unwind", Value: bson.M{
-				"path": "$time",
+				"path":              "$time",
+				"includeArrayIndex": "idx1",
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$unwind", Value: bson.M{
+				"path":              "$ip",
+				"includeArrayIndex": "idx2",
 			},
 		}},
 		bson.D{primitive.E{
 			Key: "$project", Value: bson.M{
-				"year":  bson.M{"$year": "$time"},
-				"month": bson.M{"$month": "$time"},
-				"day":   bson.M{"$dayOfMonth": "$time"},
-				"hour":  bson.M{"$hour": "$time"},
+				"_id":   1,
+				"time":  1,
+				"ip":    1,
+				"valid": bson.M{"$eq": []string{"$idx1", "$idx2"}},
+			},
+		}},
+		bson.D{primitive.E{
+			Key: "$match", Value: bson.M{"valid": true},
+		}},
+		bson.D{primitive.E{
+			Key: "$project", Value: bson.M{
+				"_id": bson.M{
+					"year":  bson.M{"$year": "$time"},
+					"month": bson.M{"$month": "$time"},
+					"day":   bson.M{"$dayOfMonth": "$time"},
+					"hour":  bson.M{"$hour": "$time"},
+				},
+				"time": "$time",
+				"ip":   "$ip",
 			},
 		}},
 		bson.D{primitive.E{
 			Key: "$group",
 			Value: bson.M{
-				"_id": bson.M{
-					"$dateFromParts": bson.M{
-						"year":  "$year",
-						"month": "$month",
-						"day":   "$day",
-						"hour":  "$hour",
-					},
-				},
-				"time": bson.M{"$first": bson.M{
-					"$dateFromParts": bson.M{
-						"year":  "$year",
-						"month": "$month",
-						"day":   "$day",
-						"hour":  "$hour",
-					},
-				}},
-				"count": bson.M{"$sum": 1},
+				"_id":    "$_id",
+				"time":   bson.M{"$first": "$time"},
+				"visits": bson.M{"$push": "$ip"},
+				"users":  bson.M{"$addToSet": "$ip"},
 			},
 		}},
 		bson.D{primitive.E{
-			Key: "$sort", Value: bson.M{
-				"_id": -1,
+			Key: "$project",
+			Value: bson.M{
+				"time": 1,
+				"pv":   bson.M{"$size": "$visits"},
+				"uv":   bson.M{"$size": "$users"},
 			},
 		}},
+		// bson.D{primitive.E{
+		// 	Key: "$sort", Value: bson.M{
+		// 		"pv": -1, "uv": -1,
+		// 	},
+		// }},
 	}, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count time hist: %w", err)
 	}
 	defer cur.Close(ctx)
 
-	var results []timehist
+	var results []models.TimeHist
 	if err := cur.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to fetch time hist results: %w", err)
 	}
-
 	return results, nil
 }
 

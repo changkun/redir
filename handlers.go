@@ -76,7 +76,7 @@ func logging() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				log.Println(readIP(r), r.Method, r.URL.Path)
+				log.Println(readIP(r), r.Method, r.URL.Path, r.URL.RawQuery)
 			}()
 			next.ServeHTTP(w, r)
 		})

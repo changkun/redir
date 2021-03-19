@@ -167,6 +167,7 @@ const formatDate = (date) => {
 function addUACharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-ua`)
   fetchData('/s?' + new URLSearchParams({
+      mode: 'stat',
       a: id.replace('alias-', ''),
       stat: 'ua',
       // TODO: data zoom
@@ -243,6 +244,7 @@ function addUACharts(id) {
 function addRefererCharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-referer`)
   fetchData('/s?' + new URLSearchParams({
+      mode: 'stat',
       a: id.replace('alias-', ''),
       stat: 'referer',
       // TODO: data zoom
@@ -280,30 +282,37 @@ function addRefererCharts(id) {
 function addTimeCharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-time`)
   fetchData('/s?' + new URLSearchParams({
+      mode: 'stat',
       a: id.replace('alias-', ''),
       stat: 'time',
       // TODO: data zoom
       // t0: 
       // t1: 
   }), (data) => {
+    console.log(data)
+
     const today = new Date()
     const start = new Date()
     start.setDate(today.getDate() - 6)
 
     const begin = formatDate(start)
     const end = formatDate(today)
-    const dates = dateRange(begin, end)
-
+    const pv = dateRange(begin, end)
+    const uv = dateRange(begin, end)
     for (let i = 0; i < data.length; i++) {
       const d = formatDate(new Date(data[i].time))
-      if (dates[d] != undefined) {
-        dates[d] += data[i].count
+      if (pv[d] != undefined) {
+        pv[d] += data[i].pv
+      }
+      if (uv[d] != undefined) {
+        uv[d] += data[i].uv
       }
     }
-    echarts.init(chartDom).setOption({
+    const ch = echarts.init(chartDom)
+    ch.setOption({
       xAxis: {
         type: 'category',
-        data: Object.keys(dates),
+        data: Object.keys(pv),
         axisLine: {
           lineStyle: {
             color: '#fff',
@@ -318,12 +327,30 @@ function addTimeCharts(id) {
           },
         },
       },
+      dataZoom: [{
+        type: 'slider',
+        start: 0,
+        end: 100
+      }],
+      tooltip: {
+          trigger: 'axis'
+      },
       series: [{
-        data: Object.values(dates),
+        name: 'PV',
+        data: Object.values(pv),
+        type: 'line',
+        smooth: true,
+        areaStyle: {},
+      }, {
+        name: 'UV',
+        data: Object.values(uv),
         type: 'line',
         smooth: true,
         areaStyle: {},
       }]
+    })
+    ch.on('datazoom', params => {
+      console.log(params)
     })
   })
 }
