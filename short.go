@@ -98,7 +98,7 @@ func importFile(fname string) {
 
 		t, err := time.Parse(time.RFC3339, info.ValidFrom)
 		if err != nil {
-			log.Fatalf("incorrect time format, expect RFC3339, but: %v", info.ValidFrom)
+			log.Fatalf("incorrect time format, expect RFC3339, but: %v, err: %v", info.ValidFrom, err)
 		}
 		// This might conflict with existing ones, it should be fine
 		// at the moment, the user of redir can always the command twice.
@@ -228,7 +228,6 @@ func (s *server) shortHandler(kind aliasKind) http.Handler {
 		}
 
 		// redirect the user immediate, but run pv/uv count in background
-		fmt.Println("check:", time.Now().UTC(), red.ValidFrom.UTC())
 		if time.Now().UTC().Sub(red.ValidFrom.UTC()) > 0 {
 			http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
 		} else {
