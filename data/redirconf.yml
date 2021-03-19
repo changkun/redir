@@ -16,4 +16,3 @@ x:
   vcs: git
   repo_path: https://github.com/changkun
   godoc_host: https://pkg.go.dev/
-google_analytics: UA-80889616-2
