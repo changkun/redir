@@ -124,17 +124,15 @@ func (s *server) xHandler() http.Handler {
 		repoRoot = conf.X.RepoPath + "/" + elem
 
 		d := &struct {
-			ImportRoot      string
-			VCS             string
-			VCSRoot         string
-			Suffix          string
-			GoogleAnalytics string
+			ImportRoot string
+			VCS        string
+			VCSRoot    string
+			Suffix     string
 		}{
-			ImportRoot:      importRoot,
-			VCS:             conf.X.VCS,
-			VCSRoot:         repoRoot,
-			Suffix:          suffix,
-			GoogleAnalytics: conf.GoogleAnalytics,
+			ImportRoot: importRoot,
+			VCS:        conf.X.VCS,
+			VCSRoot:    repoRoot,
+			Suffix:     suffix,
 		}
 		w.Header().Set("Cache-Control", "public, max-age=300")
 		err := xTmpl.Execute(w, d)

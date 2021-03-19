@@ -336,11 +336,10 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*redirect, error) 
 var errInvalidStatParam = errors.New("invalid stat parameter")
 
 type records struct {
-	Title           string
-	Host            string
-	Prefix          string
-	Records         []record
-	GoogleAnalytics string
+	Title   string
+	Host    string
+	Prefix  string
+	Records []record
 }
 
 func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWriter, r *http.Request) error {
@@ -363,11 +362,10 @@ func (s *server) stats(ctx context.Context, kind aliasKind, w http.ResponseWrite
 	}
 
 	ars := records{
-		Title:           conf.Title,
-		Host:            r.Host,
-		Prefix:          prefix,
-		Records:         nil,
-		GoogleAnalytics: conf.GoogleAnalytics,
+		Title:   conf.Title,
+		Host:    r.Host,
+		Prefix:  prefix,
+		Records: nil,
 	}
 	rs, err := s.db.CountVisit(ctx, kind)
 	if err != nil {

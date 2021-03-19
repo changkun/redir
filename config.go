@@ -31,7 +31,6 @@ type config struct {
 		RepoPath   string `yaml:"repo_path"`
 		GoDocHost  string `yaml:"godoc_host"`
 	} `yaml:"x"`
-	GoogleAnalytics string `yaml:"google_analytics"`
 }
 
 //go:embed config.yml
