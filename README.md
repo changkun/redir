@@ -4,16 +4,28 @@ Self-hosted link shortener and request redirector.
 
 ## Features
 
-- Link shortner: support `/s` for short semantic alias and `/r` for anonymous shortening
-- Go's [Vanity Import](https://golang.org/cmd/go/#hdr-Remote_import_paths): redirect `domain/x` to configured VCS and `pkg.go.dev` for API documentation
-- PV/UV timeline visualization
-- Visitor referer visualization
-- Visitor device visualization
-- ...More
+- **Custom domain**: everything is under control with your own domain
+- **Link shortner**: support `/s/semantic-name` for short semantic alias and `/r/random-str` for anonymous shortening
+- **Go [Vanity Import](https://golang.org/cmd/go/#hdr-Remote_import_paths)**: redirect `/x/repo-name` to configured VCS and `pkg.go.dev` for API documentation
+- **Access control**
+  + Private links will not be listed in public index page
+  + Allow link to be accessible only after a configured time point
+- **Public indexes**: `/s`
+- **Admin dashboard**: `/s?mode=admin`
+- **Visitor analysis**: Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc
+- **Privacy**: GDPR friendly, no cookies
+- ... and more
 
-![](./demo.png)
+## Web Usage
 
-Index page at: [changkun.de/s](https://changkun.de/s).
+### Public Indexes
+
+
+![](./assets/index.png)
+
+### Admin Dashboard
+
+TBA
 
 ## CLI Usage
 
@@ -73,11 +85,13 @@ $ redir -op delete -a changkun
 
 ## Deployment
 
-Build native binary:
+### Build
+
+Build everything into a single native binary:
 
 ```sh
 $ make
-$ redir -s # run the server
+$ redir -s # run the server, require an external database
 ```
 
 Build and deploy with Docker:
@@ -87,19 +101,11 @@ $ docker network create traefik_proxy
 $ make build && make up
 ```
 
-## Configuration
+### Configuration
 
 The [default configuration](./config.yml) is embedded into the binary.
 
 Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
-
-## Troubleshooting regarding Private Vanity URL Imports
-
-
-```
-$ git config --global url."git@github.com:".insteadOf "https://github.com/"
-$ echo "export GOPRIVATE=changkun.de/x" >> ~/.zshrc
-```
 
 ## Who is using this service?
 
