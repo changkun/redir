@@ -15,10 +15,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var (
-	ErrExistedAlias = errors.New("alias is existed")
-)
-
 // StoreAlias stores a given short alias with the given link if not exists
 func (db *Store) StoreAlias(ctx context.Context, r *models.Redirect) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
@@ -70,7 +66,7 @@ func (db *Store) UpdateAlias(ctx context.Context, r *models.Redirect) error {
 	return nil
 }
 
-// Delete deletes a given short alias if exists
+// DeleteAlias deletes a given short alias if exists.
 func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
@@ -82,7 +78,7 @@ func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
 	return
 }
 
-// FetchAlias reads a given alias and returns the associated link
+// FetchAlias reads a given alias and returns the associated link.
 func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
@@ -92,4 +88,40 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, er
 		return nil, fmt.Errorf("cannot find alias %s: %v", a, err)
 	}
 	return &r, nil
+}
+
+// FetchAliasAll reads all aliases by given page size and page number.
+func (db *Store) FetchAliasAll(ctx context.Context, public bool, pageSize, pageNum int64) ([]models.Redirect, int64, error) {
+	col := db.cli.Database(dbname).Collection(collink)
+
+	filter := bson.M{}
+	if public {
+		filter = bson.M{"private": false}
+	}
+
+	opts := []*options.FindOptions{
+		options.Find().SetLimit(pageSize),
+		options.Find().SetSkip((pageNum - 1) * pageSize),
+	}
+	if public {
+		opts = append(opts, options.Find().SetProjection(bson.M{"url": 0}))
+	}
+
+	cur, err := col.Find(ctx, filter, opts...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cur.Close(ctx)
+
+	n, err := col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var rs []models.Redirect
+	if err := cur.All(ctx, &rs); err != nil {
+		return nil, 0, err
+	}
+
+	return rs, n, nil
 }

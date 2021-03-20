@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -226,13 +227,15 @@ func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models
 	return
 }
 
+var errUnauthorized = errors.New("request unauthorized")
+
 // shortHandler redirects the current request to a known link if the alias is
 // found in the redir store.
 func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		defer func() {
-			if err != nil {
+			if err != nil && !errors.Is(err, errUnauthorized) {
 				// Just redirect the user we could not find the record rather than
 				// throw 50x. The server logs should be able to identify the issue.
 				log.Printf("request err: %v\n", err)
@@ -249,6 +252,29 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 			err = fmt.Errorf("%s is not supported", r.Method)
 		}
 	})
+}
+
+func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
+	if !conf.Auth.Enable {
+		return nil
+	}
+
+	w.Header().Set("WWW-Authenticate", `Basic realm="redir"`)
+
+	u, p, ok := r.BasicAuth()
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return fmt.Errorf("%w: failed to parsing basic auth", errUnauthorized)
+	}
+	if u != conf.Auth.Username {
+		w.WriteHeader(http.StatusUnauthorized)
+		return fmt.Errorf("%w: username is invalid", errUnauthorized)
+	}
+	if p != conf.Auth.Password {
+		w.WriteHeader(http.StatusUnauthorized)
+		return fmt.Errorf("%w: password is invalid", errUnauthorized)
+	}
+	return nil
 }
 
 type shortInput struct {
@@ -311,16 +337,16 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 
 	alias := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, prefix), "/")
 
+	// If alias is empty, then process index page request.
+	if alias == "" {
+		err = s.sIndex(ctx, w, r, kind)
+		return err
+	}
+
 	// Process visitor information, wait maximum 5 seconds.
 	recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	s.recognizeVisitor(recordCtx, w, r, alias, kind)
-
-	// If alias is empty, then process index page request.
-	if alias == "" {
-		err = s.sIndex(ctx, kind, w, r)
-		return err
-	}
 
 	// Figure out redirect location
 	red, ok := s.cache.Get(alias)
@@ -439,10 +465,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redirect, 
 	}
 	err = s.db.StoreAlias(ctx, r)
 	if err != nil {
-		if errors.Is(err, db.ErrExistedAlias) {
-			return s.checkdb(ctx, alias)
-		}
-		return nil, err
+		return s.checkdb(ctx, alias)
 	}
 
 	return r, nil
@@ -460,29 +483,6 @@ type records struct {
 	Records []models.VisitRecord
 }
 
-func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
-	if !conf.Auth.Enable {
-		return nil
-	}
-
-	w.Header().Set("WWW-Authenticate", `Basic realm="redir"`)
-
-	u, p, ok := r.BasicAuth()
-	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		return errors.New("failed to parsing basic auth")
-	}
-	if u != conf.Auth.Username {
-		w.WriteHeader(http.StatusUnauthorized)
-		return fmt.Errorf("username is invalid: %s", u)
-	}
-	if p != conf.Auth.Password {
-		w.WriteHeader(http.StatusUnauthorized)
-		return fmt.Errorf("password is invalid: %s", p)
-	}
-	return nil
-}
-
 // sIndex serves two types of index page, and serves statistics data.
 //
 // If there are no supplied value of a `mode` query parameter, the method
@@ -494,21 +494,32 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
 //
 // If the query parameter contaisn mode=stat, then it returns application/json
 // data, which contains data for data visualizations in the index page.
-func (s *server) sIndex(ctx context.Context, kind models.AliasKind, w http.ResponseWriter, r *http.Request) error {
+func (s *server) sIndex(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	kind models.AliasKind,
+) error {
 	mode := r.URL.Query().Get("mode")
 	switch mode {
-	case "admin":
-		err := s.handleAuth(w, r)
-		if err != nil {
-			return err
-		}
-	case "stat":
+	case "stat": // stat data is public to everyone
 		err := s.statData(ctx, w, r, kind)
 		if !errors.Is(err, errInvalidStatParam) {
 			return err
 		}
 		log.Println(err)
+	case "index": // public visible index data
+		return s.indexData(ctx, w, r, kind, true)
+	case "admin": // admin data
+		return s.indexData(ctx, w, r, kind, false)
+	default:
+		// Process visitor information for public index, wait maximum 5 seconds.
+		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		s.recognizeVisitor(recordCtx, w, r, "", kind)
 	}
+
+	// Serve the index page.
 
 	w.Header().Add("Content-Type", "text/html")
 
@@ -533,6 +544,58 @@ func (s *server) sIndex(ctx context.Context, kind models.AliasKind, w http.Respo
 	ars.Records = rs
 	statsTmpl = template.Must(template.ParseFiles("public/stats.html"))
 	return statsTmpl.Execute(w, ars)
+}
+
+type indexOutput struct {
+	Data  []models.Redirect `json:"data"`
+	Page  int64             `json:"page"`
+	Total int64             `json:"total"`
+}
+
+// index on all aliases, require admin access.
+func (s *server) indexData(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	k models.AliasKind,
+	public bool,
+) error {
+	if !public {
+		err := s.handleAuth(w, r)
+		if err != nil {
+			return err
+		}
+	}
+	w.Header().Add("Content-Type", "application/json")
+
+	// get page size and number
+	ps := r.URL.Query().Get("ps")
+	pageSize, err := strconv.ParseUint(ps, 10, 0)
+	if err != nil {
+		pageSize = 5
+	}
+	pn := r.URL.Query().Get("pn")
+	pageNum, err := strconv.ParseUint(pn, 10, 0)
+	if err != nil || pageNum <= 0 {
+		pageNum = 1
+	}
+
+	rs, total, err := s.db.FetchAliasAll(ctx, public, int64(pageSize), int64(pageNum))
+	if err != nil {
+		return err
+	}
+
+	b, err := json.Marshal(indexOutput{
+		Data:  rs,
+		Page:  int64(pageNum),
+		Total: total,
+	})
+	if err != nil {
+		return err
+	}
+
+	w.Write(b)
+	return nil
 }
 
 func (s *server) statData(
