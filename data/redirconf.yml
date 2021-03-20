@@ -16,3 +16,7 @@ x:
   vcs: git
   repo_path: https://github.com/changkun
   godoc_host: https://pkg.go.dev/
+auth:
+  enable: true
+  username: changkun
+  password: redir

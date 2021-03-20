@@ -4,7 +4,9 @@
 
 package models
 
-import "time"
+import (
+	"time"
+)
 
 // AliasKind represents a kind of alias
 type AliasKind int
@@ -17,6 +19,7 @@ const (
 
 // Redirect records a kind of alias and its correlated link.
 type Redirect struct {
+	ID        string    `json:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      bson:"alias"`
 	Kind      AliasKind `json:"kind"       bson:"kind"`
 	URL       string    `json:"url"        bson:"url"`
@@ -26,15 +29,17 @@ type Redirect struct {
 
 // Visit indicates an record of visit pattern.
 type Visit struct {
-	Alias   string    `json:"alias"   bson:"alias"`
-	Kind    AliasKind `json:"kind"    bson:"kind"`
-	IP      string    `json:"ip"      bson:"ip"`
-	UA      string    `json:"ua"      bson:"ua"`
-	Referer string    `json:"referer" bson:"referer"`
-	Time    time.Time `json:"time"    bson:"time"`
+	VisitorID string    `json:"visitor_id" bson:"visitor_id"`
+	Alias     string    `json:"alias"      bson:"alias"`
+	Kind      AliasKind `json:"kind"       bson:"kind"`
+	IP        string    `json:"ip"         bson:"ip"`
+	UA        string    `json:"ua"         bson:"ua"`
+	Referer   string    `json:"referer"    bson:"referer"`
+	Time      time.Time `json:"time"       bson:"time"`
 }
 
-// THe record does not contain time range so that the user of this struct
+// VisitRecord represents the visit record of an alias.
+// The record does not contain time range so that the user of this struct
 // can customize it.
 type VisitRecord struct {
 	Alias string `json:"alias" bson:"alias"`

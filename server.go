@@ -9,13 +9,13 @@ import (
 	_ "embed"
 	"html/template"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 
 	"changkun.de/x/redir/internal/cache"
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
+	"changkun.de/x/redir/internal/utils"
 )
 
 type server struct {
@@ -57,13 +57,6 @@ func (s *server) close() {
 func (s *server) registerHandler() {
 	l := logging()
 
-	// admin handler
-	// index: /s
-	// admin: /s?mode=admin
-	// create: POST /s {action: "create", alias: "xxx", "link": "", "tag": "xxx"}
-	// update: POST /s {action: "update", alias: "xxx", "link": "", "tag": "xxx"}
-	// delete: POST /s {action: "delete", alias: "xxx"}
-
 	// short redirector
 	http.Handle(conf.S.Prefix, l(s.shortHandler(models.KindShort)))
 	http.Handle(conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
@@ -76,36 +69,11 @@ func logging() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				log.Println(readIP(r), r.Method, r.URL.Path, r.URL.RawQuery)
+				log.Println(utils.ReadIP(r), r.Method, r.URL.Path, r.URL.RawQuery)
 			}()
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// readIP implements a best effort approach to return the real client IP,
-// it parses X-Real-IP and X-Forwarded-For in order to work properly with
-// reverse-proxies such us: nginx or haproxy. Use X-Forwarded-For before
-// X-Real-Ip as nginx uses X-Real-Ip with the proxy's IP.
-//
-// This implementation is derived from gin-gonic/gin.
-func readIP(r *http.Request) string {
-	clientIP := r.Header.Get("X-Forwarded-For")
-	clientIP = strings.TrimSpace(strings.Split(clientIP, ",")[0])
-	if clientIP == "" {
-		clientIP = strings.TrimSpace(r.Header.Get("X-Real-Ip"))
-	}
-	if clientIP != "" {
-		return clientIP
-	}
-	if addr := r.Header.Get("X-Appengine-Remote-Addr"); addr != "" {
-		return addr
-	}
-	ip, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err != nil {
-		return "unknown" // use unknown to guarantee non empty string
-	}
-	return ip
 }
 
 // xHandler redirect returns an HTTP handler that redirects requests for
