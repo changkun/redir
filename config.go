@@ -31,6 +31,10 @@ type config struct {
 		RepoPath   string `yaml:"repo_path"`
 		GoDocHost  string `yaml:"godoc_host"`
 	} `yaml:"x"`
+	Admin struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	}
 }
 
 //go:embed config.yml
