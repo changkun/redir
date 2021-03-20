@@ -13,7 +13,6 @@ Self-hosted link shortener and request redirector.
 - **Public indexes**: `/s`
 - **Admin dashboard**: `/s?mode=admin`
 - **Visitor analysis**: Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc
-- **Privacy**: GDPR friendly, no cookies
 - ... and more
 
 ## Web Usage
