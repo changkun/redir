@@ -3,6 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 <style>
 html, body {
+    font-family: monospace;
     height: 100%;
     background-color: #333;
 }
@@ -80,8 +81,8 @@ const calcTime = (countDownDate) => {
     return `${days}d ${hours}h ${minutes}m ${seconds}s`
 }
 
-
-const validFrom = "{{.ValidFrom}}"
+// Server always fills UTC, should convert to local
+const validFrom = '{{.ValidFrom}}+00:00'
 const countDownDate = new Date(validFrom).getTime()
 
 const d = document.getElementById('absolute-time')

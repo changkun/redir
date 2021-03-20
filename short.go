@@ -340,8 +340,9 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 		http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
 	} else {
 		err = sTmpl.Execute(w, &struct {
-			ValidFrom time.Time
-		}{red.ValidFrom})
+			ValidFrom string
+			// no timezone, client should conver to local time.
+		}{red.ValidFrom.UTC().Format("2006-01-02T15:04:05")})
 		if err != nil {
 			return
 		}
