@@ -8,6 +8,7 @@ addr: :9123
 store: mongodb://localhost:27018
 s:
   prefix: /s/
+  allow_cors: true
 r:
   enable: true
   length: 6

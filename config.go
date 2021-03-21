@@ -18,7 +18,8 @@ type config struct {
 	Addr  string `yaml:"addr"`
 	Store string `yaml:"store"`
 	S     struct {
-		Prefix string `yaml:"prefix"`
+		Prefix    string `yaml:"prefix"`
+		AllowCORS bool   `yaml:"allow_cors"`
 	} `yaml:"s"`
 	R struct {
 		Enable bool   `yaml:"enable"`
