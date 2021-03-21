@@ -9,9 +9,11 @@ store: mongodb://localhost:27018
 s:
   prefix: /s/
 r:
+  enable: true
   length: 6
   prefix: /r/
 x:
+  enable: true
   prefix: /x/
   vcs: git
   repo_path: https://github.com/changkun

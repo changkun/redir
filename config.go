@@ -21,10 +21,12 @@ type config struct {
 		Prefix string `yaml:"prefix"`
 	} `yaml:"s"`
 	R struct {
+		Enable bool   `yaml:"enable"`
 		Length int    `yaml:"length"`
 		Prefix string `yaml:"prefix"`
 	} `yaml:"r"`
 	X struct {
+		Enable     bool   `yaml:"enable"`
 		Prefix     string `yaml:"prefix"`
 		VCS        string `yaml:"vcs"`
 		ImportPath string `yaml:"import_path"`
