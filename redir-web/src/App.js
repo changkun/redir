@@ -4,7 +4,7 @@ import './App.css';
 import Home from './components/Home'
 
 const App = () => (
-    <Home />
+    <Home isAdmin={false}/>
 );
 
 export default App;

@@ -91,12 +91,12 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, er
 }
 
 // FetchAliasAll reads all aliases by given page size and page number.
-func (db *Store) FetchAliasAll(ctx context.Context, public bool, pageSize, pageNum int64) ([]models.Redirect, int64, error) {
+func (db *Store) FetchAliasAll(ctx context.Context, public bool, kind models.AliasKind, pageSize, pageNum int64) ([]models.Redirect, int64, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	filter := bson.M{}
+	filter := bson.M{"kind": kind}
 	if public {
-		filter = bson.M{"private": false}
+		filter = bson.M{"kind": kind, "private": false}
 	}
 
 	opts := []*options.FindOptions{

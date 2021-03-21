@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@ant-design/charts": "^1.0.21",
     "@ant-design/dark-theme": "^2.0.2",
+    "@ant-design/pro-form": "^1.18.4",
     "@ant-design/pro-table": "^2.31.0",
     "antd": "^4.14.0",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
-    "react-scripts": "4.0.3"
+    "react-scripts": "4.0.3",
+    "ua-parser-js": "^0.7.24"
   },
   "scripts": {
     "start": "react-scripts start",

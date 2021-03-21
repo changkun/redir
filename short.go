@@ -243,6 +243,15 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 			}
 		}()
 
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		if r.Method == "OPTIONS" {
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", "max-age=0")
+
 		switch r.Method {
 		case http.MethodPost:
 			err = s.shortHandlerPost(kind, w, r)
@@ -502,7 +511,7 @@ func (s *server) sIndex(
 ) error {
 	mode := r.URL.Query().Get("mode")
 	switch mode {
-	case "stat": // stat data is public to everyone
+	case "stats": // stats data is public to everyone
 		err := s.statData(ctx, w, r, kind)
 		if !errors.Is(err, errInvalidStatParam) {
 			return err
@@ -580,7 +589,7 @@ func (s *server) indexData(
 		pageNum = 1
 	}
 
-	rs, total, err := s.db.FetchAliasAll(ctx, public, int64(pageSize), int64(pageNum))
+	rs, total, err := s.db.FetchAliasAll(ctx, public, k, int64(pageSize), int64(pageNum))
 	if err != nil {
 		return err
 	}
