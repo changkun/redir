@@ -1,4 +1,4 @@
-import { Layout, Menu } from 'antd'
+import { Layout, Menu, Row, Col, Button } from 'antd'
 import RedirTable from './RedirTable'
 import RedirCreate from './RedirCreate'
 import './Home.css'
@@ -9,12 +9,18 @@ const Home = (props) => {
   return (
     <Layout className="layout">
       <Header>
-        <div className="logo">
-          <a href="/s">redir</a>
-        </div>
-        <Menu theme="dark" mode="horizontal" defaultSelectedKeys={['1']}>
-          <Menu.Item key="1">Dashboard</Menu.Item>
-        </Menu>
+        <Row>
+          <Col flex="100px">
+            <a href="/s" style={{fontSize: '28px'}}>redir</a>
+          </Col>
+          <Col>
+          {
+            props.isAdmin ? 
+            <Button danger><a href="/s">Logout</a></Button> :
+            <Button><a href="/s?mode=admin">Go to Dashboard</a></Button>
+          }
+          </Col>
+        </Row>
       </Header>
       <Content style={{ padding: '0 50px' }}>
         <div className="layout-content">

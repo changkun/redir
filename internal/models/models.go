@@ -17,14 +17,28 @@ const (
 	KindRandom
 )
 
-// Redirect records a kind of alias and its correlated link.
-type Redirect struct {
+// Redir is the core redir model, it records a kind of alias
+// and its correlated link.
+type Redir struct {
 	ID        string    `json:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      bson:"alias"`
 	Kind      AliasKind `json:"kind"       bson:"kind"`
 	URL       string    `json:"url"        bson:"url"`
 	Private   bool      `json:"private"    bson:"private"`
-	ValidFrom time.Time `json:"valid_from,omitempty" bson:"valid_from"`
+	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
+}
+
+// RedirIndex is an extension to Redir, which offers more statistic
+// information such as PV/UV.
+type RedirIndex struct {
+	ID        string    `json:"-"          bson:"_id"`
+	Alias     string    `json:"alias"      bson:"alias"`
+	Kind      AliasKind `json:"kind"       bson:"kind"`
+	URL       string    `json:"url"        bson:"url"`
+	Private   bool      `json:"private"    bson:"private"`
+	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
+	UV        int64     `json:"uv" bson:"uv"`
+	PV        int64     `json:"pv" bson:"pv"`
 }
 
 // Visit indicates an record of visit pattern.

@@ -16,7 +16,7 @@ import (
 )
 
 // StoreAlias stores a given short alias with the given link if not exists
-func (db *Store) StoreAlias(ctx context.Context, r *models.Redirect) (err error) {
+func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	opts := options.Update().SetUpsert(true)
@@ -38,7 +38,7 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redirect) (err error)
 }
 
 // UpdateAlias updates the link of a given alias
-func (db *Store) UpdateAlias(ctx context.Context, r *models.Redirect) error {
+func (db *Store) UpdateAlias(ctx context.Context, r *models.Redir) error {
 	if r.ID == "" {
 		return errors.New("missing document ID")
 	}
@@ -49,7 +49,7 @@ func (db *Store) UpdateAlias(ctx context.Context, r *models.Redirect) error {
 
 	col := db.cli.Database(dbname).Collection(collink)
 
-	var ret models.Redirect
+	var ret models.Redir
 	err = col.FindOneAndUpdate(ctx,
 		bson.M{"_id": id},
 		bson.M{"$set": bson.M{
@@ -79,10 +79,10 @@ func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
 }
 
 // FetchAlias reads a given alias and returns the associated link.
-func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, error) {
+func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redir, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	var r models.Redirect
+	var r models.Redir
 	err := col.FindOne(ctx, bson.M{"alias": a}).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find alias %s: %v", a, err)
@@ -91,22 +91,45 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redirect, er
 }
 
 // FetchAliasAll reads all aliases by given page size and page number.
-func (db *Store) FetchAliasAll(ctx context.Context, public bool, kind models.AliasKind, pageSize, pageNum int64) ([]models.Redirect, int64, error) {
+func (db *Store) FetchAliasAll(
+	ctx context.Context,
+	public bool,
+	kind models.AliasKind,
+	pageSize, pageNum int64,
+) ([]models.RedirIndex, int64, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
-	filter := bson.M{"kind": kind}
+	// public UI does not offer any statistic informations:
+	// no PV/UV, no actual URLs.
 	if public {
-		filter = bson.M{"kind": kind, "private": false}
+		filter := bson.M{"kind": kind, "private": false}
+		opts := []*options.FindOptions{
+			options.Find().SetLimit(pageSize),
+			options.Find().SetSkip((pageNum - 1) * pageSize),
+			options.Find().SetProjection(bson.M{"url": 0})}
+		cur, err := col.Find(ctx, filter, opts...)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer cur.Close(ctx)
+
+		n, err := col.CountDocuments(ctx, filter)
+		if err != nil {
+			return nil, 0, err
+		}
+		var rs []models.RedirIndex
+		if err := cur.All(ctx, &rs); err != nil {
+			return nil, 0, err
+		}
+		return rs, n, nil
 	}
 
+	// Non-public mode queries PV/UV as additional information,
+	// and paginates on this. Let's first find the aliases.
+	filter := bson.M{"kind": kind}
 	opts := []*options.FindOptions{
 		options.Find().SetLimit(pageSize),
-		options.Find().SetSkip((pageNum - 1) * pageSize),
-	}
-	if public {
-		opts = append(opts, options.Find().SetProjection(bson.M{"url": 0}))
-	}
-
+		options.Find().SetSkip((pageNum - 1) * pageSize)}
 	cur, err := col.Find(ctx, filter, opts...)
 	if err != nil {
 		return nil, 0, err
@@ -117,10 +140,36 @@ func (db *Store) FetchAliasAll(ctx context.Context, public bool, kind models.Ali
 	if err != nil {
 		return nil, 0, err
 	}
-
-	var rs []models.Redirect
+	var rs []models.RedirIndex
 	if err := cur.All(ctx, &rs); err != nil {
 		return nil, 0, err
+	}
+
+	// This is a little bit ugly. I know. But this seems to be the least effort
+	// so far. It simply finds the matched PV/UV for the above searched aliases.
+	var as []string
+	for _, r := range rs {
+		as = append(as, r.Alias)
+	}
+	vr, err := db.StatVisit(ctx, as)
+	if err != nil {
+		return nil, 0, err
+	}
+	temp := map[string]struct {
+		PV int64
+		UV int64
+	}{}
+	for _, v := range vr {
+		temp[v.Alias] = struct {
+			PV int64
+			UV int64
+		}{PV: v.PV, UV: v.UV}
+	}
+	for i := range rs {
+		if v, ok := temp[rs[i].Alias]; ok {
+			rs[i].PV = v.PV
+			rs[i].UV = v.UV
+		}
 	}
 
 	return rs, n, nil

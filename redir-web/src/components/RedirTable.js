@@ -20,31 +20,31 @@ const RedirTable = (props) => {
 
   let columns = [
     {
-      title: 'Alias',
+      title: 'Short Link',
       dataIndex: 'alias',
-      render: text => <a href={'/s/'+text}>{text}</a>,
-      width: '20%',
+      render: text => {
+        text.props.copyable.text = window.location.host + '/s/' + text.props.copyable.text
+        return <span>/s/{text}</span>
+      },
+      width: '15%',
+      copyable: true,
     },
     {
       title: 'URL',
       key: 'url',
       dataIndex: 'url',
-      render: text => {
-        if (props.isAdmin) {
-          return text
-        }
-        return <a
-          href={window.location.protocol+'//'+text.props.copyable.text}
-        >{text.props.copyable.text}</a>
-      },
       valueType: 'string',
       width: '30%',
-      copyable: true,
       ellipsis: true,
     },
   ]
   if (props.isAdmin) {
     columns.push(...[
+      {
+        title: 'PV/UV',
+        dataIndex: 'visits',
+        hideInSearch: true,
+      },
       {
         title: 'Visibility',
         key: 'private',
@@ -84,14 +84,12 @@ const RedirTable = (props) => {
         rowKey='alias'
         recordCreatorProps={false}
         columns={columns}
-        search={props.isAdmin ? {labelWidth: 'auto'} : false}
         pagination={{pageSize: pageSize}}
-        expandable={{ expandedRowRender }}
+        expandable={props.isAdmin ? { expandedRowRender } : false}
         request={async (params) => {
           let headers = new Headers()
           headers.set('Authorization', 'Basic ' + btoa('changkun:redir'))
-
-          const mode = props.isAdmin ? 'admin' : 'index'
+          const mode = props.isAdmin ? 'index-pro' : 'index'
           // const host = window.location.protocol + '//' + window.location.host
           const host = 'http://localhost:9123'
           const url = `${host}/s/?mode=${mode}&pn=${params.current}&ps=${params.pageSize}`
@@ -100,10 +98,14 @@ const RedirTable = (props) => {
           })
           const redirs = await resp.json()
           for (let i = 0; i < redirs.data.length; i++) {
-            redirs.data[i].url = window.location.host + '/s/' + redirs.data[i].alias
-            redirs.data[i].private = redirs.data[i].private ? 'true' : 'false'
-            if (redirs.data[i].valid_from === '0001-01-01T00:00:00Z') {
-              redirs.data[i].valid_from = null
+            if (!props.isAdmin) {
+              redirs.data[i].url = window.location.host + '/s/' + redirs.data[i].alias
+            } else {
+              redirs.data[i].private = redirs.data[i].private ? 'true' : 'false'
+              if (redirs.data[i].valid_from === '0001-01-01T00:00:00Z') {
+                redirs.data[i].valid_from = null
+              }
+              redirs.data[i].visits = `${redirs.data[i].pv}/${redirs.data[i].uv}`
             }
           }
           return redirs

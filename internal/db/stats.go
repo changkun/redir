@@ -403,3 +403,67 @@ func (db *Store) StatVisits(ctx context.Context, kind models.AliasKind) (rs []mo
 
 	return results, nil
 }
+
+// StatVisit counts the PV/UV of a given alias.
+//
+// The current approach is to use visitor's IP address.
+func (db *Store) StatVisit(ctx context.Context, as []string) (rs []models.VisitRecord, err error) {
+	if len(as) == 0 {
+		return nil, nil
+	}
+
+	col := db.cli.Database(dbname).Collection(collink)
+	opts := options.Aggregate().SetMaxTime(10 * time.Second)
+	matches := []bson.M{}
+	for _, a := range as {
+		matches = append(matches, bson.M{"alias": a})
+	}
+
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{
+			primitive.E{Key: "$match", Value: bson.M{"$or": matches}},
+		},
+		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: bson.M{
+				"path":                       "$visit",
+				"preserveNullAndEmptyArrays": true,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id":   bson.M{"alias": "$alias", "ip": "$visit.ip"},
+				"count": bson.M{"$sum": 1},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id":   "$_id.alias",
+				"alias": bson.M{"$first": "$_id.alias"},
+				"uv":    bson.M{"$sum": 1},
+				"pv":    bson.M{"$sum": "$count"},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"pv": -1, "uv": -1}},
+		},
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count visit: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []models.VisitRecord
+	if err := cur.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to fetch visit results: %w", err)
+	}
+
+	return results, nil
+}

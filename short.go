@@ -82,7 +82,7 @@ func importFile(fname string) {
 			t = time.Now().UTC()
 		}
 
-		r := &models.Redirect{
+		r := &models.Redir{
 			Alias:     alias,
 			URL:       info.URL,
 			Kind:      models.KindShort,
@@ -111,7 +111,7 @@ func importFile(fname string) {
 		}
 		alias := utils.Randstr(conf.R.Length)
 
-		r := &models.Redirect{
+		r := &models.Redir{
 			Alias:     alias,
 			URL:       info.URL,
 			Kind:      models.KindRandom,
@@ -133,7 +133,7 @@ func importFile(fname string) {
 }
 
 // shortCmd processes the given alias and link with a specified op.
-func shortCmd(ctx context.Context, operate op, r *models.Redirect) (err error) {
+func shortCmd(ctx context.Context, operate op, r *models.Redir) (err error) {
 	s, err := db.NewStore(conf.Store)
 	if err != nil {
 		err = fmt.Errorf("cannot create a new alias: %w", err)
@@ -155,7 +155,7 @@ func shortCmd(ctx context.Context, operate op, r *models.Redirect) (err error) {
 // if the operation is create, then the alias is not necessary.
 // if the operation is update/fetch/delete, then the alias is used to
 // match the existing aliases, meaning that alias can be changed.
-func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models.Redirect) (err error) {
+func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models.Redir) (err error) {
 	switch operate {
 	case opCreate:
 		err = s.StoreAlias(ctx, r)
@@ -173,7 +173,7 @@ func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models
 		}
 		log.Printf("%s%s%s\n", conf.Host, prefix, r.Alias)
 	case opUpdate:
-		var rr *models.Redirect
+		var rr *models.Redir
 
 		// fetch the old values if possible, we don't care
 		// if here returns an error.
@@ -217,7 +217,7 @@ func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models
 		}
 		log.Printf("alias %v has been deleted.\n", a)
 	case opFetch:
-		var r *models.Redirect
+		var r *models.Redir
 		r, err = s.FetchAlias(ctx, a)
 		if err != nil {
 			return
@@ -324,7 +324,7 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 		return
 	}
 
-	var redir models.Redirect
+	var redir models.Redir
 	err = json.Unmarshal(b, &redir)
 	if err != nil {
 		return
@@ -434,7 +434,7 @@ func (s *server) recognizeVisitor(
 }
 
 // checkdb checks whether the given alias is exsited in the redir database
-func (s *server) checkdb(ctx context.Context, alias string) (*models.Redirect, error) {
+func (s *server) checkdb(ctx context.Context, alias string) (*models.Redir, error) {
 	a, err := s.db.FetchAlias(ctx, alias)
 	if err != nil {
 		return nil, err
@@ -444,7 +444,7 @@ func (s *server) checkdb(ctx context.Context, alias string) (*models.Redirect, e
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
 // then creates a new alias and returns url of the vcs repository.
-func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redirect, error) {
+func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, error) {
 
 	// construct the try path and make the request to vcs
 	repoPath := conf.X.RepoPath
@@ -468,7 +468,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redirect, 
 	}
 
 	// store such a try path
-	r := &models.Redirect{
+	r := &models.Redir{
 		Alias:     alias,
 		Kind:      models.KindShort,
 		URL:       tryPath,
@@ -522,8 +522,10 @@ func (s *server) sIndex(
 		log.Println(err)
 	case "index": // public visible index data
 		return s.indexData(ctx, w, r, kind, true)
-	case "admin": // admin data
+	case "index-pro": // data with statistics
 		return s.indexData(ctx, w, r, kind, false)
+	case "admin":
+		fallthrough // TODO: render admin UI
 	default:
 		// Process visitor information for public index, wait maximum 5 seconds.
 		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -559,9 +561,9 @@ func (s *server) sIndex(
 }
 
 type indexOutput struct {
-	Data  []models.Redirect `json:"data"`
-	Page  int64             `json:"page"`
-	Total int64             `json:"total"`
+	Data  []models.RedirIndex `json:"data"`
+	Page  int64               `json:"page"`
+	Total int64               `json:"total"`
 }
 
 // index on all aliases, require admin access.
