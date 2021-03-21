@@ -24,7 +24,7 @@ type Redirect struct {
 	Kind      AliasKind `json:"kind"       bson:"kind"`
 	URL       string    `json:"url"        bson:"url"`
 	Private   bool      `json:"private"    bson:"private"`
-	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
+	ValidFrom time.Time `json:"valid_from,omitempty" bson:"valid_from"`
 }
 
 // Visit indicates an record of visit pattern.

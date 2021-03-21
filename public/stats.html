@@ -167,7 +167,7 @@ const formatDate = (date) => {
 function addUACharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-ua`)
   fetchData('/s?' + new URLSearchParams({
-      mode: 'stat',
+      mode: 'stats',
       a: id.replace('alias-', ''),
       stat: 'ua',
       // TODO: data zoom
@@ -244,7 +244,7 @@ function addUACharts(id) {
 function addRefererCharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-referer`)
   fetchData('/s?' + new URLSearchParams({
-      mode: 'stat',
+      mode: 'stats',
       a: id.replace('alias-', ''),
       stat: 'referer',
       // TODO: data zoom
@@ -282,7 +282,7 @@ function addRefererCharts(id) {
 function addTimeCharts(id) {
   const chartDom = document.getElementById(`${id}-data-stat-time`)
   fetchData('/s?' + new URLSearchParams({
-      mode: 'stat',
+      mode: 'stats',
       a: id.replace('alias-', ''),
       stat: 'time',
       // TODO: data zoom

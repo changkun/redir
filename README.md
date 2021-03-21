@@ -84,6 +84,31 @@ $ redir -op delete -a changkun
 
 ## Deployment
 
+### Routers
+
+All possible routers:
+
+```
+/s
+/r
+/x
+```
+
+Query parameters for `/s` and `/r`:
+
+- `mode`, possible options: `stat`, `index`, `admin`
+  + `admin` mode
+    - `ps`, page size
+    - `pn`, page number
+  + `index` mode
+    - `ps`, page size
+    - `pn`, page number
+  + `stats` mode
+    - `a`, alias for stat data 
+    - `stat`, possible options: `referer`, `ua`, `time`
+      - `t0`, start time
+      - `t1`, end time
+
 ### Build
 
 Build everything into a single native binary:
