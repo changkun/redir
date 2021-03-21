@@ -20,7 +20,7 @@ func prepare(ctx context.Context, t *testing.T) *db.Store {
 		t.Fatalf("cannot connect to data store")
 	}
 
-	err = s.StoreAlias(ctx, &models.Redirect{
+	err = s.StoreAlias(ctx, &models.Redir{
 		Alias:   kalias,
 		Kind:    models.KindShort,
 		URL:     "link",
@@ -45,7 +45,7 @@ func TestUpdateAlias(t *testing.T) {
 	ctx := context.Background()
 	s := prepare(ctx, t)
 
-	err := s.UpdateAlias(ctx, &models.Redirect{
+	err := s.UpdateAlias(ctx, &models.Redir{
 		Alias: kalias,
 		URL:   want,
 	})

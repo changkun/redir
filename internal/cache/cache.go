@@ -65,20 +65,20 @@ func (l *LRU) Len() uint {
 	return l.size
 }
 
-func (l *LRU) Get(k string) (*models.Redirect, bool) {
+func (l *LRU) Get(k string) (*models.Redir, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {
 			l.elems.MoveToFront(e)
-			return e.Value.(*item).v.(*models.Redirect), true
+			return e.Value.(*item).v.(*models.Redir), true
 		}
 	}
 	return nil, false
 }
 
-func (l *LRU) Put(k string, v *models.Redirect) {
+func (l *LRU) Put(k string, v *models.Redir) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

@@ -138,7 +138,7 @@ func runCmd() {
 			return
 		}
 
-		err = shortCmd(ctx, op(*operate), &models.Redirect{
+		err = shortCmd(ctx, op(*operate), &models.Redir{
 			Alias:     *alias,
 			Kind:      kind,
 			URL:       *link,

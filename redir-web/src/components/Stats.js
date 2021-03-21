@@ -13,7 +13,7 @@ const Stats = (props) => {
   const t1 = today.toISOString().slice(0, 10)
 
   const [pvuvData, setPVUVData] = useState([])
-  useEffect(() => {asyncFetchTime()}, [])
+  useEffect(() => asyncFetchTime(), [])
   const asyncFetchTime = () => {
     fetch('http://localhost:9123/s/?'+ new URLSearchParams({
       mode: 'stats',
@@ -32,7 +32,7 @@ const Stats = (props) => {
     })
   }
   const [refData, setRefData] = useState([])
-  useEffect(() => {asyncFetchRef()}, [])
+  useEffect(() => asyncFetchRef(), [])
   const asyncFetchRef = () => {
     fetch('http://localhost:9123/s/?'+ new URLSearchParams({
       mode: 'stats',
