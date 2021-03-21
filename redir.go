@@ -65,7 +65,7 @@ redir -op delete -a changkun
 
 func main() {
 	log.SetPrefix("redir: ")
-	log.SetFlags(log.Lmsgprefix | log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	log.SetFlags(log.Lmsgprefix | log.LstdFlags | log.Lshortfile)
 	flag.Usage = usage
 	flag.Parse()
 

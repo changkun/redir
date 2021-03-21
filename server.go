@@ -57,12 +57,21 @@ func (s *server) close() {
 func (s *server) registerHandler() {
 	l := logging()
 
-	// short redirector
+	// semantic shortener (default)
+	log.Println("router /s is enabled.")
 	http.Handle(conf.S.Prefix, l(s.shortHandler(models.KindShort)))
-	http.Handle(conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+
+	// random shortener
+	if conf.R.Enable {
+		log.Println("router /r is enabled.")
+		http.Handle(conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+	}
 
 	// repo redirector
-	http.Handle(conf.X.Prefix, l(s.xHandler()))
+	if conf.X.Enable {
+		log.Println("router /x is enabled.")
+		http.Handle(conf.X.Prefix, l(s.xHandler()))
+	}
 }
 
 func logging() func(http.Handler) http.Handler {
