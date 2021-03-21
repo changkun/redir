@@ -243,14 +243,17 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 			}
 		}()
 
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		if r.Method == "OPTIONS" {
-			return
+		// for development.
+		if conf.S.AllowCORS {
+			w.Header().Set("Access-Control-Allow-Headers", "*")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			if r.Method == "OPTIONS" {
+				return
+			}
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Cache-Control", "max-age=0")
 		}
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Cache-Control", "max-age=0")
 
 		switch r.Method {
 		case http.MethodPost:
