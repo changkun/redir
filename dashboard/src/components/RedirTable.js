@@ -1,3 +1,7 @@
+// Copyright 2021 Changkun Ou. All rights reserved.
+// Use of this source code is governed by a MIT
+// license that can be found in the LICENSE file.
+
 import React, { useState } from 'react'
 import { EditableProTable } from '@ant-design/pro-table'
 import { ConfigProvider } from 'antd'
@@ -39,12 +43,13 @@ const RedirTable = (props) => {
     },
   ]
   if (props.isAdmin) {
+    columns.unshift({
+      title: 'PV/UV',
+      dataIndex: 'visits',
+      hideInSearch: true,
+      editable: false,
+    })
     columns.push(...[
-      {
-        title: 'PV/UV',
-        dataIndex: 'visits',
-        hideInSearch: true,
-      },
       {
         title: 'Visibility',
         key: 'private',
@@ -87,14 +92,13 @@ const RedirTable = (props) => {
         pagination={{pageSize: pageSize}}
         expandable={props.isAdmin ? { expandedRowRender } : false}
         request={async (params) => {
-          let headers = new Headers()
-          headers.set('Authorization', 'Basic ' + btoa('changkun:redir'))
           const mode = props.isAdmin ? 'index-pro' : 'index'
           // const host = window.location.protocol + '//' + window.location.host
           const host = 'http://localhost:9123'
           const url = `${host}/s/?mode=${mode}&pn=${params.current}&ps=${params.pageSize}`
           const resp = await fetch(url, {
-            method: 'GET', headers: headers,
+            method: 'GET',
+            credentials: 'same-origin',
           })
           const redirs = await resp.json()
           for (let i = 0; i < redirs.data.length; i++) {

@@ -15,18 +15,19 @@ Self-hosted link shortener and request redirector.
 - **Visitor analysis**: Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc
 - ... and more
 
-## Web Usage
+## Web
 
 ### Public Indexes
-
 
 ![](./assets/index.png)
 
 ### Admin Dashboard
 
-TBA
+![](./assets/admin.png)
 
 ## CLI Usage
+
+The `redir` command offers server side operation feature from shell:
 
 ```
 $ redir
@@ -84,20 +85,40 @@ $ redir -op delete -a changkun
 
 ## Deployment
 
-### Routers
+### Build
 
-All possible routers:
+Build everything into a single native binary:
+
+```sh
+$ make dashboard # build front-end
+$ make           # build back-end and embed front-end files into binary
+
+$ redir -s # run the server, require an external database
+```
+
+Build and deploy with Docker:
 
 ```
-/s
-/r
-/x
+$ docker network create traefik_proxy
+$ make dashboard && make build && make up
 ```
 
-Query parameters for `/s` and `/r`:
+### APIs
 
-- `mode`, possible options: `stat`, `index`, `admin`
-  + `admin` mode
+All possible routers: `/s`, `/r`, and `/x`. The `/s` is the most
+complicated router because we are limited to use these prefixes
+(for many reasons, e.g. deploy to an existing domain that served a lot
+different routers. The prefix is configurable).
+
+Thus, all kinds of data, pages, static files are served under this router.
+
+#### GET /s
+
+The GET request query parameters of `/s` and `/r` are listed as follows:
+
+- `admin`, access admin dashboard
+- `mode`, possible options: `stats`, `index`, `index-pro`
+  + `index-pro` mode, admin only
     - `ps`, page size
     - `pn`, page number
   + `index` mode
@@ -109,20 +130,21 @@ Query parameters for `/s` and `/r`:
       - `t0`, start time
       - `t1`, end time
 
-### Build
+#### POST /s
 
-Build everything into a single native binary:
+The POST request body of `/s` and `/r` is in the following format:
 
-```sh
-$ make
-$ redir -s # run the server, require an external database
-```
-
-Build and deploy with Docker:
-
-```
-$ docker network create traefik_proxy
-$ make build && make up
+```json
+{
+    "op": "create",
+    "alias": "awesome-link",
+    "data": {
+        "alias": "awesome-link",
+        "url": "https://github.com/changkun",
+        "private": true,
+        "valid_from": "2022-01-01T00:00:00+00:00"
+    }
+}
 ```
 
 ### Configuration
@@ -133,15 +155,15 @@ Alternative configuration can be used to replace default config and specified in
 
 ## Who is using this service?
 
-Existing famous link shortener service, such as `bitly`, `tinyurl`, etc.,
-offers similar features but requires an unreasonably overpriced subscription fee.
+Existing famous link shortener services, such as `bitly`, `tinyurl`, etc.,
+offer similar features but requires an unreasonably overpriced subscription fee.
 Therefore, the initial purpose of building this service is to support link
 shortener under domain [changkun.de](https://changkun.de), and
-it is the currently active user of this service.
+it is one of the active user of this service currently.
 
-Project `redir` was initially written under [golang.design/s/redir](https://golang.design/s/redir),
-due to the different requirements, but this project has branched out from it
-and now has a different architecture and feature set.
+I wrote `redir` under [golang.design/s/redir](https://golang.design/s/redir)
+initially. Due to the different requirements, this project has branched out
+from it and has a different architecture and feature set now.
 
 To know more users, check our [wiki](https://github.com/changkun/redir/wiki) page.
 

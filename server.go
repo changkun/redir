@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"embed"
-	_ "embed"
 	"html/template"
 	"io/fs"
 	"log"
@@ -26,13 +25,13 @@ type server struct {
 }
 
 var (
-	//go:embed public/x.html
+	//go:embed templates/x.html
 	xtmpl string
-	//go:embed public/wait.html
+	//go:embed templates/wait.html
 	wtmpl string
-	//go:embed redir-web/build/index.html
+	//go:embed dashboard/build/index.html
 	stmpl string
-	//go:embed redir-web/build/static/*
+	//go:embed dashboard/build/static/*
 	sasse embed.FS
 )
 
@@ -54,7 +53,7 @@ func newServer(ctx context.Context) *server {
 	wTmpl = template.Must(template.New("wtmpl").Parse(wtmpl))
 	sTmpl = template.Must(template.New("stmpl").Parse(stmpl))
 	var err error
-	statics, err = fs.Sub(sasse, "redir-web/build/static")
+	statics, err = fs.Sub(sasse, "dashboard/build/static")
 	if err != nil {
 		log.Fatalf("cannot access sub file system: %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -152,6 +153,11 @@ func shortCmd(ctx context.Context, operate op, r *models.Redir) (err error) {
 	return
 }
 
+var (
+	validAlias      = regexp.MustCompile(`^[\w\-][\w\-. \/]+$`)
+	errInvalidAlias = errors.New("invalid alias pattern")
+)
+
 // shortEdit edits the datastore for a given alias in a given operation.
 // if the operation is create, then the alias is not necessary.
 // if the operation is update/fetch/delete, then the alias is used to
@@ -159,6 +165,11 @@ func shortCmd(ctx context.Context, operate op, r *models.Redir) (err error) {
 func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models.Redir) (err error) {
 	switch operate {
 	case opCreate:
+		if !validAlias.MatchString(r.Alias) {
+			err = errInvalidAlias
+			return
+		}
+
 		err = s.StoreAlias(ctx, r)
 		if err != nil {
 			return
@@ -362,6 +373,11 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	if alias == "" {
 		err = s.sIndex(ctx, w, r, kind)
 		return err
+	}
+
+	// Only allow valid aliases.
+	if !validAlias.MatchString(alias) {
+		return errInvalidAlias
 	}
 
 	// Process visitor information, wait maximum 5 seconds.
