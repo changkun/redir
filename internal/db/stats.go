@@ -404,7 +404,7 @@ func (db *Store) StatVisits(ctx context.Context, kind models.AliasKind) (rs []mo
 	return results, nil
 }
 
-// StatVisit counts the PV/UV of a given alias.
+// StatVisit counts the PV/UV of given aliases.
 //
 // The current approach is to use visitor's IP address.
 func (db *Store) StatVisit(ctx context.Context, as []string) (rs []models.VisitRecord, err error) {

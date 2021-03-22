@@ -24,7 +24,7 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 0, got %v", l.Len())
 	}
 
-	r := &models.Redirect{
+	r := &models.Redir{
 		Alias:     "a",
 		Kind:      models.KindShort,
 		URL:       "1",
@@ -40,7 +40,7 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 1, got %v", l.Len())
 	}
 
-	l.Put("b", &models.Redirect{
+	l.Put("b", &models.Redir{
 		Alias:     "b",
 		Kind:      models.KindShort,
 		URL:       "2",
@@ -58,7 +58,7 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 2, got %v", l.Len())
 	}
 
-	r = &models.Redirect{
+	r = &models.Redir{
 		Alias:     "c",
 		Kind:      models.KindShort,
 		URL:       "3",
@@ -87,28 +87,28 @@ func TestLRU(t *testing.T) {
 	}
 
 	tt := time.Now().UTC()
-	l.Put("a", &models.Redirect{
+	l.Put("a", &models.Redir{
 		Alias:     "a",
 		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("b", &models.Redirect{
+	l.Put("b", &models.Redir{
 		Alias:     "b",
 		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("c", &models.Redirect{
+	l.Put("c", &models.Redir{
 		Alias:     "c",
 		Kind:      models.KindShort,
 		URL:       "3",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	rr := &models.Redirect{
+	rr := &models.Redir{
 		Alias:     "a",
 		Kind:      models.KindShort,
 		URL:       "2",
@@ -140,7 +140,7 @@ func rands() string {
 func BenchmarkLRU(b *testing.B) {
 	l := NewLRU(false)
 
-	r := &models.Redirect{
+	r := &models.Redir{
 		Alias:     "a",
 		Kind:      models.KindShort,
 		URL:       "1",
@@ -159,7 +159,7 @@ func BenchmarkLRU(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			// each goroutine put its own k/v
 			k := rands()
-			v := &models.Redirect{
+			v := &models.Redir{
 				Alias:     k,
 				Kind:      models.KindShort,
 				URL:       rands(),
@@ -178,7 +178,7 @@ func BenchmarkLRU(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				k := rands()
-				v := &models.Redirect{
+				v := &models.Redir{
 					Alias:     k,
 					Kind:      models.KindShort,
 					URL:       rands(),
