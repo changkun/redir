@@ -12,6 +12,8 @@ all:
 	go build $(BUILD_FLAGS)
 run:
 	./$(BINARY) -s
+dashboard:
+	cd dashboard && npm i && npm run build
 build:
 	CGO_ENABLED=0 GOOS=linux go build $(BUILD_FLAGS)
 	docker build -t $(IMAGE):latest .
@@ -23,3 +25,4 @@ clean:
 	rm -rf $(BINARY)
 	docker rmi -f $(shell docker images -f "dangling=true" -q) 2> /dev/null; true
 	docker rmi -f $(IMAGE):latest 2> /dev/null; true
+.PHONY: run dashboard build up down clean

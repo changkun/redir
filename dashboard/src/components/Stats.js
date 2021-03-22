@@ -1,3 +1,7 @@
+// Copyright 2021 Changkun Ou. All rights reserved.
+// Use of this source code is governed by a MIT
+// license that can be found in the LICENSE file.
+
 import React, { useState, useEffect } from 'react'
 import { Row, Col, PageHeader, Divider } from 'antd';
 import { Line, Pie, Bar } from '@ant-design/charts'
@@ -110,6 +114,18 @@ const Stats = (props) => {
   for (const [key, value] of Object.entries(devices)) {
     deviceArray.push({value: value, name: key})
   }
+
+  browserArray.sort((a, b) => {
+    if (a.value < b.value) return 1
+    if (a.value > b.value) return -1
+    return 0
+  })
+  console.log(browserArray)
+  deviceArray.sort((a, b) => {
+    if (a.value < b.value) return 1
+    if (a.value > b.value) return -1
+    return 0
+  })
 
   return (
     <div>
