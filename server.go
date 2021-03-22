@@ -6,8 +6,10 @@ package main
 
 import (
 	"context"
+	"embed"
 	_ "embed"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -27,18 +29,35 @@ var (
 	//go:embed public/x.html
 	xtmpl string
 	//go:embed public/wait.html
+	wtmpl string
+	//go:embed redir-web/build/index.html
 	stmpl string
+	//go:embed redir-web/build/static/*
+	sasse embed.FS
 )
 
 var (
-	xTmpl     *template.Template
-	sTmpl     *template.Template
-	statsTmpl *template.Template
+	xTmpl   *template.Template
+	wTmpl   *template.Template
+	sTmpl   *template.Template
+	statics fs.FS
 )
+
+func init() {
+	// We are not allow to use any additional routers.
+	// Replace all /static files to ./.static folder.
+	stmpl = strings.Replace(stmpl, "/static", "./.static", -1)
+}
 
 func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
+	wTmpl = template.Must(template.New("wtmpl").Parse(wtmpl))
 	sTmpl = template.Must(template.New("stmpl").Parse(stmpl))
+	var err error
+	statics, err = fs.Sub(sasse, "redir-web/build/static")
+	if err != nil {
+		log.Fatalf("cannot access sub file system: %v", err)
+	}
 
 	db, err := db.NewStore(conf.Store)
 	if err != nil {

@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -248,7 +249,7 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 			w.Header().Set("Access-Control-Allow-Headers", "*")
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			if r.Method == "OPTIONS" {
+			if r.Method == http.MethodOptions {
 				return
 			}
 			w.Header().Set("Cache-Control", "no-store")
@@ -347,6 +348,14 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 		prefix = conf.R.Prefix
 	}
 
+	// Serve static files under ./.static/*. This should not conflict
+	// with all existing aliases, meaning that alias should not start
+	// with a dot.
+	if strings.HasPrefix(r.URL.Path, prefix+".static") {
+		return s.serveStatic(ctx, w, r, prefix)
+	}
+
+	// Identify the alias of the short link.
 	alias := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, prefix), "/")
 
 	// If alias is empty, then process index page request.
@@ -377,7 +386,7 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	if time.Now().UTC().Sub(red.ValidFrom.UTC()) > 0 {
 		http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
 	} else {
-		err = sTmpl.Execute(w, &struct {
+		err = wTmpl.Execute(w, &struct {
 			ValidFrom string
 			// no timezone, client should conver to local time.
 		}{red.ValidFrom.UTC().Format("2006-01-02T15:04:05")})
@@ -387,6 +396,32 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	}
 
 	return
+}
+
+func (s *server) serveStatic(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	prefix string,
+) error {
+	ext := filepath.Ext(r.URL.Path)
+	switch ext {
+	case ".css":
+		w.Header().Add("Content-Type", "text/css")
+	case ".js":
+		w.Header().Add("Content-Type", "text/javascript")
+	}
+
+	f, err := statics.Open(strings.TrimPrefix(r.URL.Path, prefix+".static/"))
+	if err != nil {
+		return err
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	w.Write(b)
+	return nil
 }
 
 const redirVidCookie = "redir_vid"
@@ -488,13 +523,6 @@ var (
 	errMissingStatParam = errors.New("missing stat parameter")
 )
 
-type records struct {
-	Title   string
-	Host    string
-	Prefix  string
-	Records []models.VisitRecord
-}
-
 // sIndex serves two types of index page, and serves statistics data.
 //
 // If there are no supplied value of a `mode` query parameter, the method
@@ -512,6 +540,12 @@ func (s *server) sIndex(
 	r *http.Request,
 	kind models.AliasKind,
 ) error {
+	e := struct {
+		AdminView bool
+	}{
+		AdminView: false,
+	}
+
 	mode := r.URL.Query().Get("mode")
 	switch mode {
 	case "stats": // stats data is public to everyone
@@ -525,7 +559,11 @@ func (s *server) sIndex(
 	case "index-pro": // data with statistics
 		return s.indexData(ctx, w, r, kind, false)
 	case "admin":
-		fallthrough // TODO: render admin UI
+		err := s.handleAuth(w, r)
+		if err != nil {
+			return err
+		}
+		e.AdminView = true
 	default:
 		// Process visitor information for public index, wait maximum 5 seconds.
 		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -534,30 +572,8 @@ func (s *server) sIndex(
 	}
 
 	// Serve the index page.
-
 	w.Header().Add("Content-Type", "text/html")
-
-	var prefix string
-	switch kind {
-	case models.KindShort:
-		prefix = conf.S.Prefix
-	case models.KindRandom:
-		prefix = conf.R.Prefix
-	}
-
-	ars := records{
-		Title:   conf.Title,
-		Host:    r.Host,
-		Prefix:  prefix,
-		Records: nil,
-	}
-	rs, err := s.db.StatVisits(ctx, kind)
-	if err != nil {
-		return err
-	}
-	ars.Records = rs
-	statsTmpl = template.Must(template.ParseFiles("public/stats.html"))
-	return statsTmpl.Execute(w, ars)
+	return sTmpl.Execute(w, e)
 }
 
 type indexOutput struct {

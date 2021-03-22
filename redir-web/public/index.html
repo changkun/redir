@@ -7,6 +7,7 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <!-- {{.AdminView}} is replaced by server. -->
+    <div id="root" is-admin="{{.AdminView}}"></div>
   </body>
 </html>
