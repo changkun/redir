@@ -20,6 +20,7 @@ import (
 var (
 	daemon   = flag.Bool("s", false, "Run redir server")
 	fromfile = flag.String("f", "", "Import aliases from a YAML file")
+	dump     = flag.String("d", "", "Dump aliases from database and export as a YAML file")
 	operate  = flag.String("op", "create", "Operators, create/update/delete/fetch")
 	alias    = flag.String("a", "", "Alias for a new link")
 	link     = flag.String("l", "", "Actual link for the alias, optional for delete/fetch")
@@ -29,7 +30,7 @@ var (
 
 func usage() {
 	fmt.Fprintf(os.Stderr,
-		`usage: redir [-s] [-f <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+		`usage: redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
 options:
 `)
 	flag.PrintDefaults()
@@ -40,6 +41,9 @@ redir -s
 
 redir -f ./import.yml
 	Import aliases from a file
+
+redir -d ./redir.yml
+	Dump all aliases from database and export in YAML format.
 
 redir -a changkun -l https://changkun.de
 	Allocate new short link if possible
@@ -94,6 +98,11 @@ func runServer() {
 func runCmd() {
 	if *fromfile != "" {
 		importFile(*fromfile)
+		return
+	}
+
+	if *dump != "" {
+		dumpFile(*dump)
 		return
 	}
 

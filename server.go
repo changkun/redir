@@ -30,7 +30,7 @@ var (
 	//go:embed templates/wait.html
 	wtmpl string
 	//go:embed dashboard/build/index.html
-	stmpl string
+	dtmpl string
 	//go:embed dashboard/build/static/*
 	sasse embed.FS
 )
@@ -38,20 +38,20 @@ var (
 var (
 	xTmpl   *template.Template
 	wTmpl   *template.Template
-	sTmpl   *template.Template
+	dTmpl   *template.Template
 	statics fs.FS
 )
 
 func init() {
 	// We are not allow to use any additional routers.
 	// Replace all /static files to ./.static folder.
-	stmpl = strings.Replace(stmpl, "/static", "./.static", -1)
+	dtmpl = strings.Replace(dtmpl, "/static", "./.static", -1)
 }
 
 func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
 	wTmpl = template.Must(template.New("wtmpl").Parse(wtmpl))
-	sTmpl = template.Must(template.New("stmpl").Parse(stmpl))
+	dTmpl = template.Must(template.New("stmpl").Parse(dtmpl))
 	var err error
 	statics, err = fs.Sub(sasse, "dashboard/build/static")
 	if err != nil {
