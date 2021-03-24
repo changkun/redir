@@ -2,7 +2,6 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-import React from 'react';
 import { ConfigProvider, Button, message } from 'antd';
 import ProForm, {
   ModalForm,
@@ -21,7 +20,39 @@ const waitTime = (time = 100) => {
   })
 }
 
-const RedirCreate = () => {
+const rfc3339 = (datestr) => {
+  if (datestr === '' || datestr === null || datestr === undefined) {
+    return null
+  }
+
+  const d = new Date(datestr)
+
+  function pad(n) {
+      return n < 10 ? "0" + n : n;
+  }
+
+  function timezoneOffset(offset) {
+      var sign;
+      if (offset === 0) {
+          return "Z";
+      }
+      sign = (offset > 0) ? "-" : "+";
+      offset = Math.abs(offset);
+      return sign + pad(Math.floor(offset / 60)) + ":" + pad(offset % 60);
+  }
+
+  return d.getFullYear() + "-" +
+      pad(d.getMonth() + 1) + "-" +
+      pad(d.getDate()) + "T" +
+      pad(d.getHours()) + ":" +
+      pad(d.getMinutes()) + ":" +
+      pad(d.getSeconds()) + 
+      timezoneOffset(d.getTimezoneOffset());
+}
+
+const RedirCreate = (props) => {
+  const ref = props.refreshRef
+
   return (
     <ConfigProvider locale={enUS}>
     <ModalForm
@@ -39,13 +70,39 @@ const RedirCreate = () => {
         </Button>
       }
       modalProps={{
-        onCancel: () => console.log('run'),
+        onCancel: () => console.log('nothing to do. really ;-)'),
       }}
       onFinish={async (values) => {
         await waitTime(200);
-        console.log(values);
-        message.success('Success');
-        return true;
+
+        const path = window.location.pathname.endsWith('/') ?
+          window.location.pathname.slice(0, -1) :
+          window.location.pathname
+        const resp = await fetch(path+'/', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            op: 'create',
+            data: {
+              alias: values.alias,
+              url: values.url,
+              private: values.private === 'true' ? true : false,
+              valid_from: rfc3339(values.valid_from),
+            }
+          })
+        })
+        if (!resp.ok) {
+          const data = await resp.json()
+          message.error(data.message)
+          return false
+        }
+        message.success(`Short link ${window.location.pathname}/${values.alias} is created and have been saved to your clipboard!`, 10)
+        navigator.clipboard.writeText(`${window.location.host}${window.location.pathname}/${values.alias}`)
+        ref.current.reload() // refresh table.
+        return true
       }}
     >
       <ProForm.Group>
@@ -104,8 +161,8 @@ const RedirCreate = () => {
           tooltip="Public alias will be listed on the public index page (Default: Public)."
         />
         <ProFormDateTimePicker
-          name="contractTime"
-          label="Accessible from"
+          name="valid_from"
+          label="Valid from"
           placeholder="Please select accessible time"
           tooltip="The shortened link is avaliable since the time you specified. Before the specified time, the link shows a countdown page."
         />

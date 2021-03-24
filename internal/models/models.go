@@ -33,7 +33,7 @@ type Redir struct {
 type RedirIndex struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       yaml:"kind"       bson:"kind"`
+	Kind      AliasKind `json:"kind"       yaml:"-"       bson:"kind"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
 	ValidFrom time.Time `json:"valid_from" yaml:"valid_from" bson:"valid_from"`

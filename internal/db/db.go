@@ -24,13 +24,13 @@ type Store struct {
 }
 
 // NewStore parses the given URI and returns the database instantiation.
-func NewStore(uri string) (*Store, error) {
+func NewStore(ctx context.Context, uri string) (*Store, error) {
 	// initialize database connection
-	db, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
+	db, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}
-	err = db.Ping(context.Background(), nil)
+	err = db.Ping(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}

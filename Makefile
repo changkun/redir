@@ -1,4 +1,4 @@
-# Copyright 2020 Changkun Ou. All rights reserved.
+# Copyright 2021 Changkun Ou. All rights reserved.
 # Use of this source code is governed by a MIT
 # license that can be found in the LICENSE file.
 
@@ -16,11 +16,11 @@ dashboard:
 	cd dashboard && npm i && npm run build
 build:
 	CGO_ENABLED=0 GOOS=linux go build $(BUILD_FLAGS)
-	docker build -t $(IMAGE):latest .
+	docker build -f docker/Dockerfile -t $(IMAGE):latest .
 up:
-	docker-compose up -d
+	docker-compose -f docker/docker-compose.yml up -d
 down:
-	docker-compose down
+	docker-compose -f docker/docker-compose.yml down
 clean:
 	rm -rf $(BINARY)
 	docker rmi -f $(shell docker images -f "dangling=true" -q) 2> /dev/null; true

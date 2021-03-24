@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package config
 
 import (
 	"reflect"
@@ -10,10 +10,10 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
-	conf.parse()
+	Conf.parse()
 
 	// Test if all fields are filled.
-	v := reflect.ValueOf(conf)
+	v := reflect.ValueOf(Conf)
 	for i := 0; i < v.NumField(); i++ {
 		if v.Field(i).Kind() == reflect.Struct {
 			continue

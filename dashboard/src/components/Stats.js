@@ -19,7 +19,7 @@ const Stats = (props) => {
   const [pvuvData, setPVUVData] = useState([])
   useEffect(() => asyncFetchTime(), [])
   const asyncFetchTime = () => {
-    fetch('http://localhost:9123/s/?'+ new URLSearchParams({
+    fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'time',
@@ -38,7 +38,7 @@ const Stats = (props) => {
   const [refData, setRefData] = useState([])
   useEffect(() => asyncFetchRef(), [])
   const asyncFetchRef = () => {
-    fetch('http://localhost:9123/s/?'+ new URLSearchParams({
+    fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'referer',
@@ -57,7 +57,7 @@ const Stats = (props) => {
   const [uaData, setUAData] = useState([])
   useEffect(() => {asyncFetchUA()}, [])
   const asyncFetchUA = () => {
-    fetch('http://localhost:9123/s/?'+ new URLSearchParams({
+    fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'ua',
@@ -120,7 +120,6 @@ const Stats = (props) => {
     if (a.value > b.value) return -1
     return 0
   })
-  console.log(browserArray)
   deviceArray.sort((a, b) => {
     if (a.value < b.value) return 1
     if (a.value > b.value) return -1

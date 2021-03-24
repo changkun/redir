@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react'
 import { EditableProTable } from '@ant-design/pro-table'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, message } from 'antd'
 import enUS from 'antd/lib/locale/en_US'
 import './RedirTable.css'
 import Stats from './Stats'
@@ -15,19 +15,51 @@ const waitTime = (time = 100) => {
   })
 }
 
+const rfc3339 = (datestr) => {
+  if (datestr === '' || datestr === null || datestr === undefined) {
+    return null
+  }
+
+  const d = new Date(datestr)
+
+  function pad(n) {
+      return n < 10 ? "0" + n : n;
+  }
+
+  function timezoneOffset(offset) {
+      var sign;
+      if (offset === 0) {
+          return "Z";
+      }
+      sign = (offset > 0) ? "-" : "+";
+      offset = Math.abs(offset);
+      return sign + pad(Math.floor(offset / 60)) + ":" + pad(offset % 60);
+  }
+
+  return d.getFullYear() + "-" +
+      pad(d.getMonth() + 1) + "-" +
+      pad(d.getDate()) + "T" +
+      pad(d.getHours()) + ":" +
+      pad(d.getMinutes()) + ":" +
+      pad(d.getSeconds()) + 
+      timezoneOffset(d.getTimezoneOffset());
+}
+
 const RedirTable = (props) => {
+  const refreshRef = props.refreshRef
   const [editableKeys, setEditableRowKeys] = useState([])
   const [dataSource, setDataSource] = useState([])
-  const [newRecord, setNewRecord] = useState({
-    // id: (Math.random() * 1000000).toFixed(0),
-  })
 
   let columns = [
     {
       title: 'Short Link',
       dataIndex: 'alias',
       render: text => {
-        text.props.copyable.text = window.location.host + '/s/' + text.props.copyable.text
+        const path = window.location.pathname.endsWith('/') ?
+          window.location.pathname.slice(0, -1) :
+          window.location.pathname
+
+        text.props.copyable.text = window.location.origin + path +'/' + text.props.copyable.text
         return <span>/s/{text}</span>
       },
       width: '15%',
@@ -86,24 +118,27 @@ const RedirTable = (props) => {
   return (
     <ConfigProvider locale={enUS}>
       <EditableProTable
+        actionRef={refreshRef}
         rowKey='alias'
         recordCreatorProps={false}
         columns={columns}
         pagination={{pageSize: pageSize}}
-        expandable={props.isAdmin ? { expandedRowRender } : false}
+        expandable={props.isAdmin && props.statsMode ? { expandedRowRender } : false}
         request={async (params) => {
           const mode = props.isAdmin ? 'index-pro' : 'index'
-          // const host = window.location.protocol + '//' + window.location.host
-          const host = 'http://localhost:9123'
-          const url = `${host}/s/?mode=${mode}&pn=${params.current}&ps=${params.pageSize}`
+          const host = window.location.origin
+          const path = window.location.pathname.endsWith('/') ?
+            window.location.pathname.slice(0, -1) :
+            window.location.pathname;
+
+          const url = `${host}${path}/?mode=${mode}&pn=${params.current}&ps=${params.pageSize}`
           const resp = await fetch(url, {
             method: 'GET',
-            credentials: 'same-origin',
           })
           const redirs = await resp.json()
           for (let i = 0; i < redirs.data.length; i++) {
             if (!props.isAdmin) {
-              redirs.data[i].url = window.location.host + '/s/' + redirs.data[i].alias
+              redirs.data[i].url = window.location.host + `${path}/` + redirs.data[i].alias
             } else {
               redirs.data[i].private = redirs.data[i].private ? 'true' : 'false'
               if (redirs.data[i].valid_from === '0001-01-01T00:00:00Z') {
@@ -118,16 +153,80 @@ const RedirTable = (props) => {
         onChange={setDataSource}
         editable={{
           type: 'multiple',
+          deletePopconfirmMessage: 'Are your sure?',
           editableKeys,
-          onSave: async (params) => {
-            await waitTime(20);
-            setNewRecord({
-              alias: '',
-              // id: (Math.random() * 1000000).toFixed(0),
-            });
-            console.log('save: ', params, newRecord)
+          onSave: async (alias, row) => {
+            await waitTime(20)
+
+            const path = window.location.pathname.endsWith('/') ?
+              window.location.pathname.slice(0, -1) :
+              window.location.pathname
+
+            const data = {
+              op: 'update',
+              alias: alias,
+              data: {
+                alias: row.alias,
+                url: row.url,
+                private: row.private === 'true' ? true : false,
+                valid_from: row.valid_from === null ? null : (
+                  (typeof row.valid_from) === 'string' ? rfc3339(row.valid_from) : row.valid_from.format()
+                )
+              },
+            }
+
+            const resp = await fetch(path+'/', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(data)
+            })
+
+            if (!resp.ok) {
+              const data = await resp.json()
+              message.error(data.message)
+              return false
+            }
+            message.success(`Update success!`, 10)
+
+            await waitTime(20)
+
+            refreshRef.current.reload()
           },
           onChange: setEditableRowKeys,
+          onDelete: async (alias) => {
+            await waitTime(20)
+
+            const path = window.location.pathname.endsWith('/') ?
+              window.location.pathname.slice(0, -1) :
+              window.location.pathname
+            const data = {
+              op: 'delete',
+              alias: alias,
+            }
+            console.log(data)
+            const resp = await fetch(path+'/', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(data)
+            }).catch(err => {
+              console.error(err)
+            })
+            if (!resp.ok) {
+              const data = await resp.json()
+              message.error(data.message)
+              return false
+            }
+            message.success(`Delete success!`, 10)
+
+            await waitTime(20)
+            refreshRef.current.reload()
+          },
         }}
       />
     </ConfigProvider>

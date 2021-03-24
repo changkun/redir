@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"changkun.de/x/redir/internal/cache"
+	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/utils"
@@ -58,14 +59,11 @@ func newServer(ctx context.Context) *server {
 		log.Fatalf("cannot access sub file system: %v", err)
 	}
 
-	db, err := db.NewStore(conf.Store)
+	db, err := db.NewStore(context.Background(), config.Conf.Store)
 	if err != nil {
 		log.Fatalf("cannot establish connection to database: %v", err)
 	}
-	return &server{
-		db:    db,
-		cache: cache.NewLRU(true),
-	}
+	return &server{db: db, cache: cache.NewLRU(true)}
 }
 
 func (s *server) close() {
@@ -73,33 +71,22 @@ func (s *server) close() {
 }
 
 func (s *server) registerHandler() {
-	l := logging()
+	l := utils.Logging()
 
 	// semantic shortener (default)
 	log.Println("router /s is enabled.")
-	http.Handle(conf.S.Prefix, l(s.shortHandler(models.KindShort)))
+	http.Handle(config.Conf.S.Prefix, l(s.shortHandler(models.KindShort)))
 
 	// random shortener
-	if conf.R.Enable {
+	if config.Conf.R.Enable {
 		log.Println("router /r is enabled.")
-		http.Handle(conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+		http.Handle(config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
 	}
 
 	// repo redirector
-	if conf.X.Enable {
+	if config.Conf.X.Enable {
 		log.Println("router /x is enabled.")
-		http.Handle(conf.X.Prefix, l(s.xHandler()))
-	}
-}
-
-func logging() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				log.Println(utils.ReadIP(r), r.Method, r.URL.Path, r.URL.RawQuery)
-			}()
-			next.ServeHTTP(w, r)
-		})
+		http.Handle(config.Conf.X.Prefix, l(s.xHandler()))
 	}
 }
 
@@ -109,11 +96,11 @@ func logging() func(http.Handler) http.Handler {
 // imports by checking out code from repoPath using the configured VCS.
 func (s *server) xHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		importPath := strings.TrimSuffix(req.Host+conf.X.Prefix, "/")
+		importPath := strings.TrimSuffix(req.Host+config.Conf.X.Prefix, "/")
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
 		if path == importPath {
-			http.Redirect(w, req, conf.X.GoDocHost+importPath, http.StatusFound)
+			http.Redirect(w, req, config.Conf.X.GoDocHost+importPath, http.StatusFound)
 			return
 		}
 		elem := path[len(importPath)+1:]
@@ -121,7 +108,7 @@ func (s *server) xHandler() http.Handler {
 			elem, suffix = elem[:i], elem[i:]
 		}
 		importRoot = importPath + "/" + elem
-		repoRoot = conf.X.RepoPath + "/" + elem
+		repoRoot = config.Conf.X.RepoPath + "/" + elem
 
 		d := &struct {
 			ImportRoot string
@@ -130,7 +117,7 @@ func (s *server) xHandler() http.Handler {
 			Suffix     string
 		}{
 			ImportRoot: importRoot,
-			VCS:        conf.X.VCS,
+			VCS:        config.Conf.X.VCS,
 			VCSRoot:    repoRoot,
 			Suffix:     suffix,
 		}

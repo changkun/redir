@@ -1,0 +1,14 @@
+short:
+    - alias: blog
+      url: https://blog.changkun.de/
+      private: false
+      valid_from: 0001-01-01T00:00:00Z
+      uv: 2062
+      pv: 2204
+random:
+    - alias: Lvzyyt
+      url: https://github.com/changkun
+      private: false
+      valid_from: 0001-01-01T00:00:00Z
+      uv: 1
+      pv: 3

@@ -2,6 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
+import { useRef } from 'react'
 import { Layout, Row, Col } from 'antd'
 import RedirTable from './RedirTable'
 import RedirCreate from './RedirCreate'
@@ -11,6 +12,8 @@ import Login from './Login'
 const { Header, Content, Footer } = Layout;
 
 const Home = (props) => {
+  const tableRefresh = useRef();
+
   return (
     <Layout className="layout">
       <Header>
@@ -30,10 +33,10 @@ const Home = (props) => {
             width: 'max-content',
             justifyContent: 'flex-end',
           }}>
-          {props.isAdmin ? <RedirCreate /> : <div></div>}
+          {props.isAdmin ? <RedirCreate refreshRef={tableRefresh}/> : <div></div>}
           </div>
 
-          <RedirTable isAdmin={props.isAdmin} />
+          <RedirTable isAdmin={props.isAdmin} statsMode={props.statsMode} refreshRef={tableRefresh}/>
         </div>
       </Content>
       <Footer style={{ textAlign: 'center' }}>redir &copy; 2020-2021 Created by <a href='https://changkun.de'>Changkun Ou</a>. Open sourced under MIT license at <a href='https://changkun.de/s/redir'>GitHub</a>.</Footer>

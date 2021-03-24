@@ -13,15 +13,20 @@ Self-hosted link shortener and request redirector.
 - **Public indexes**: `/s`
 - **Admin dashboard**: `/s?mode=admin`
 - **Visitor analysis**: Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc
+- **Privacy**: GDPR friendly
 - ... and more
 
 ## Web
 
 ### Public Indexes
 
+Router: `/s` or `/r`
+
 ![](./assets/index.png)
 
 ### Admin Dashboard
+
+Router: `/s?mode=admin` or `/r?mode=admin`
 
 ![](./assets/admin.png)
 
@@ -32,10 +37,12 @@ The `redir` command offers server side operation feature from shell:
 ```
 $ redir
 
-usage: redir [-s] [-f <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+usage: redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
 options:
   -a string
         Alias for a new link
+  -d string
+        Dump aliases from database and export as a YAML file
   -f string
         Import aliases from a YAML file
   -l string
@@ -45,42 +52,35 @@ options:
   -p    The link is private and will not be listed in the index page, avaliable for operator create/update
   -s    Run redir server
   -vt string
-        the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05Z07:00. Avaliable for operator create/update (default "2006-01-02T15:04:05Z07:00")
+        the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update
 
 examples:
 redir -s
-	Run the redir server
+        Run the redir server
 
-redir -f ./import.yml
-	Import aliases from a file
+redir -f ./template/import.yml
+        Import aliases from a file
+
+redir -d ./template/export.yml
+        Dump all aliases from database and export in YAML format.
 
 redir -a changkun -l https://changkun.de
-	Allocate new short link if possible
+        Allocate new short link if possible
 
 redir -l https://changkun.de
-	Allocate a random alias for the given link if possible
+        Allocate a random alias for the given link if possible
 
 redir -op fetch -a changkun
-	Fetch alias information
+        Fetch alias information
 
 redir -op update -a changkun -l https://blog.changkun.de -p
-	The alias will not be listed in the index page
-	$ redir -op update -a changkun -l https://blog.changkun.de -p
+        The alias will not be listed in the index page
 
 redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
-	The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
+        The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
 
 redir -op delete -a changkun
-	Delete the alias from database
-```
-
-```
-$ redir -a changkun -l https://changkun.de
-$ redir -l https://changkun.de
-$ redir -f import.yml
-$ redir -op fetch -a changkun
-$ redir -op update -a changkun -l https://blog.changkun.de
-$ redir -op delete -a changkun
+        Delete the alias from database
 ```
 
 ## Deployment
@@ -116,8 +116,8 @@ Thus, all kinds of data, pages, static files are served under this router.
 
 The GET request query parameters of `/s` and `/r` are listed as follows:
 
-- `admin`, access admin dashboard
 - `mode`, possible options: `stats`, `index`, `index-pro`
+  + `admin`, access admin dashboard
   + `index-pro` mode, admin only
     - `ps`, page size
     - `pn`, page number

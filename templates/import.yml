@@ -1,9 +1,9 @@
 ---
 short:
-  changkun:
+  - alias: changkun
     url: https://changkun.de
     valid_from: 2021-03-19T12:08:00+01:00
-  any:
+  - alias: any
     private: true
     url: https://changkun.de
 random:
