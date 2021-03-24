@@ -61,8 +61,10 @@ func newServer(ctx context.Context) *server {
 
 	db, err := db.NewStore(context.Background(), config.Conf.Store)
 	if err != nil {
-		log.Fatalf("cannot establish connection to database: %v", err)
+		log.Fatalf("cannot establish connection to %s, details: \n\n%v",
+			config.Conf.Store, err)
 	}
+	log.Printf("connected to %s", config.Conf.Store)
 	return &server{db: db, cache: cache.NewLRU(true)}
 }
 

@@ -1,6 +1,6 @@
 # redir [![Latest relsease](https://img.shields.io/github/v/tag/changkun/redir?label=latest)](https://github.com/changkun/redir/releases) [![PkgGoDev](https://pkg.go.dev/badge/changkun.de/x/redir)](https://pkg.go.dev/changkun.de/x/redir) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
 
-Self-hosted link shortener and request redirector.
+Self-hosted URL shortener.
 
 ## Features
 
@@ -45,7 +45,15 @@ The `redir` command offers server side operation feature from shell:
 ```
 $ redir
 
-usage: redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+redir is a featured URL shortener. The redir server (run via '-s' option),
+will connect to the default database address mongodb://localhost:27018.
+It is possible to reconfig redir using an external configuration file.
+See https://changkun.de/s/redir for more details.
+
+Command line usage:
+
+$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+
 options:
   -a string
         Alias for a new link
@@ -91,9 +99,22 @@ redir -op delete -a changkun
         Delete the alias from database
 ```
 
+## Customization
+
+You can configure redir using a configuration file.
+The [default configuration](./internal/config/config.yml) is embedded into the binary.
+
+Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
+
 ## Deployment
 
-### Build
+### Download Pre-Builds
+
+Please check the [release](https://github.com/changkun/redir/releases) page.
+
+### Build from Source
+
+You need install [Go](https://golang.org) to build the `redir` command.
 
 Build everything into a single native binary:
 
@@ -111,7 +132,7 @@ $ docker network create traefik_proxy
 $ make dashboard && make build && make up
 ```
 
-### APIs
+## APIs
 
 All possible routers: `/s`, `/r`, and `/x`. The `/s` is the most
 complicated router because we are limited to use these prefixes
@@ -120,7 +141,7 @@ different routers. The prefix is configurable).
 
 Thus, all kinds of data, pages, static files are served under this router.
 
-#### GET /s
+### GET /s
 
 The GET request query parameters of `/s` and `/r` are listed as follows:
 
@@ -138,7 +159,7 @@ The GET request query parameters of `/s` and `/r` are listed as follows:
       - `t0`, start time
       - `t1`, end time
 
-#### POST /s
+### POST /s
 
 The POST request body of `/s` and `/r` is in the following format:
 
@@ -154,12 +175,6 @@ The POST request body of `/s` and `/r` is in the following format:
     }
 }
 ```
-
-### Configuration
-
-The [default configuration](./config.yml) is embedded into the binary.
-
-Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
 
 ## Who is using this service?
 

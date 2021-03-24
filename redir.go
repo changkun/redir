@@ -11,12 +11,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/utils"
+	"changkun.de/x/redir/internal/version"
 )
 
 var (
@@ -31,10 +33,20 @@ var (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr,
-		`usage: redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+	fmt.Fprintf(os.Stderr, `redir is a featured URL shortener. The redir server (run via '-s' option),
+will connect to the default database address %s.
+It is possible to reconfig redir using an external configuration file.
+See https://changkun.de/s/redir for more details.
+
+Version: %s
+GoVersion: %s
+
+Command line usage:
+
+$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+
 options:
-`)
+`, config.Conf.Store, version.Version, runtime.Version())
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, `
 examples:
