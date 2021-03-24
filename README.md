@@ -1,4 +1,4 @@
-# redir [![PkgGoDev](https://pkg.go.dev/badge/changkun.de/x/redir)](https://pkg.go.dev/changkun.de/x/redir) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
+# redir [![Latest relsease](https://img.shields.io/github/v/tag/changkun/redir?label=latest)](https://github.com/changkun/redir/releases) [![PkgGoDev](https://pkg.go.dev/badge/changkun.de/x/redir)](https://pkg.go.dev/changkun.de/x/redir) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
 
 Self-hosted link shortener and request redirector.
 
@@ -16,19 +16,27 @@ Self-hosted link shortener and request redirector.
 - **Privacy**: GDPR friendly
 - ... and more
 
-## Web
+## Web Interfaces
 
-### Public Indexes
-
-Router: `/s` or `/r`
-
-![](./assets/index.png)
+There are three major pages available in redir.
 
 ### Admin Dashboard
 
 Router: `/s?mode=admin` or `/r?mode=admin`
 
 ![](./assets/admin.png)
+
+### Accessible Control
+
+Control if a link should only be available after a certain time point:
+
+![](./assets/wait.png)
+
+### Public Indexes
+
+Router: `/s` or `/r`
+
+![](./assets/index.png)
 
 ## CLI Usage
 
@@ -166,6 +174,11 @@ initially. Due to the different requirements, this project has branched out
 from it and has a different architecture and feature set now.
 
 To know more users, check our [wiki](https://github.com/changkun/redir/wiki) page.
+
+## Contributing
+
+Easiest way to contribute is to provide feedback! We would love to hear
+what you like and what you think is missing. PRs are also welcome.
 
 ## License
 
