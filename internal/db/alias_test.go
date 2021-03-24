@@ -15,7 +15,7 @@ import (
 const kalias = "alias"
 
 func prepare(ctx context.Context, t *testing.T) *db.Store {
-	s, err := db.NewStore("mongodb://0.0.0.0:27017")
+	s, err := db.NewStore(context.Background(), "mongodb://0.0.0.0:27017")
 	if err != nil {
 		t.Fatalf("cannot connect to data store")
 	}

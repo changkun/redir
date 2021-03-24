@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package main
+package config
 
 import (
 	_ "embed"
@@ -17,9 +17,9 @@ type config struct {
 	Host  string `yaml:"host"`
 	Addr  string `yaml:"addr"`
 	Store string `yaml:"store"`
+	CORS  bool   `yaml:"cors"`
 	S     struct {
-		Prefix    string `yaml:"prefix"`
-		AllowCORS bool   `yaml:"allow_cors"`
+		Prefix string `yaml:"prefix"`
 	} `yaml:"s"`
 	R struct {
 		Enable bool   `yaml:"enable"`
@@ -39,6 +39,10 @@ type config struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
 	} `yaml:"auth"`
+	Stats struct {
+		Enable bool `yaml:"enable"`
+		HideIP bool `yaml:"hide_ip"`
+	} `yaml:"stats"`
 }
 
 //go:embed config.yml
@@ -60,8 +64,8 @@ func (c *config) parse() {
 	}
 }
 
-var conf config
+var Conf config
 
 func init() {
-	conf.parse()
+	Conf.parse()
 }

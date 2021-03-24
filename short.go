@@ -14,143 +14,17 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"changkun.de/x/redir/internal/db"
+	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/models"
+	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/utils"
 )
-
-// op is a short link operator
-type op string
-
-const (
-	// opCreate represents a create operation for short link
-	opCreate op = "create"
-	// opDelete represents a delete operation for short link
-	opDelete = "delete"
-	// opUpdate represents a update operation for short link
-	opUpdate = "update"
-	// opFetch represents a fetch operation for short link
-	opFetch = "fetch"
-)
-
-func (o op) valid() bool {
-	switch o {
-	case opCreate, opDelete, opUpdate, opFetch:
-		return true
-	default:
-		return false
-	}
-}
-
-// shortCmd processes the given alias and link with a specified op.
-func shortCmd(ctx context.Context, operate op, r *models.Redir) (err error) {
-	s, err := db.NewStore(conf.Store)
-	if err != nil {
-		err = fmt.Errorf("cannot create a new alias: %w", err)
-		return
-	}
-	defer s.Close()
-
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("cannot %v alias to data store: %w", operate, err)
-		}
-	}()
-
-	err = shortEdit(ctx, s, operate, r.Alias, r)
-	return
-}
-
-var (
-	validAlias      = regexp.MustCompile(`^[\w\-][\w\-. \/]+$`)
-	errInvalidAlias = errors.New("invalid alias pattern")
-)
-
-// shortEdit edits the datastore for a given alias in a given operation.
-// if the operation is create, then the alias is not necessary.
-// if the operation is update/fetch/delete, then the alias is used to
-// match the existing aliases, meaning that alias can be changed.
-func shortEdit(ctx context.Context, s *db.Store, operate op, a string, r *models.Redir) (err error) {
-	switch operate {
-	case opCreate:
-		if !validAlias.MatchString(r.Alias) {
-			err = errInvalidAlias
-			return
-		}
-
-		err = s.StoreAlias(ctx, r)
-		if err != nil {
-			return
-		}
-		log.Printf("alias %v has been created:\n", r.Alias)
-
-		var prefix string
-		switch r.Kind {
-		case models.KindShort:
-			prefix = conf.S.Prefix
-		case models.KindRandom:
-			prefix = conf.R.Prefix
-		}
-		log.Printf("%s%s%s\n", conf.Host, prefix, r.Alias)
-	case opUpdate:
-		var rr *models.Redir
-
-		// fetch the old values if possible, we don't care
-		// if here returns an error.
-		//
-		// Note that this is not atomic, meaning that we might run
-		// into concurrent inconsistent issue. But for small scale
-		// use, it is fine for now.
-		rr, err = s.FetchAlias(ctx, a)
-		if err != nil {
-			err = nil
-		} else {
-			// use old values if not presents
-			if r.URL == "" {
-				r.URL = rr.URL
-			}
-			tt := time.Time{}
-			if r.ValidFrom == tt {
-				r.ValidFrom = rr.ValidFrom
-			}
-			if rr.Kind != r.Kind {
-				r.Kind = rr.Kind
-			}
-			r.ID = rr.ID
-		}
-
-		if r.ID == "" {
-			err = fmt.Errorf("cannot find alias %s for update", a)
-			return
-		}
-
-		// do update
-		err = s.UpdateAlias(ctx, r)
-		if err != nil {
-			return
-		}
-		log.Printf("alias %v has been updated.\n", a)
-	case opDelete:
-		err = s.DeleteAlias(ctx, a)
-		if err != nil {
-			return
-		}
-		log.Printf("alias %v has been deleted.\n", a)
-	case opFetch:
-		var r *models.Redir
-		r, err = s.FetchAlias(ctx, a)
-		if err != nil {
-			return
-		}
-		log.Println(r.URL)
-	}
-	return
-}
 
 var errUnauthorized = errors.New("request unauthorized")
 
@@ -158,41 +32,62 @@ var errUnauthorized = errors.New("request unauthorized")
 // found in the redir store.
 func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		defer func() {
-			if err != nil && !errors.Is(err, errUnauthorized) {
-				// Just redirect the user we could not find the record rather than
-				// throw 50x. The server logs should be able to identify the issue.
-				log.Printf("request err: %v\n", err)
-				http.Redirect(w, r, "/404.html", http.StatusTemporaryRedirect)
-			}
-		}()
 
 		// for development.
-		if conf.S.AllowCORS {
+		if config.Conf.CORS {
 			w.Header().Set("Access-Control-Allow-Headers", "*")
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			if r.Method == http.MethodOptions {
-				return
-			}
-			w.Header().Set("Cache-Control", "no-store")
-			w.Header().Set("Cache-Control", "max-age=0")
 		}
 
 		switch r.Method {
+		case http.MethodOptions:
+			// nothing, really.
 		case http.MethodPost:
-			err = s.shortHandlerPost(kind, w, r)
+			s.shortHandlerPost(kind, w, r)
 		case http.MethodGet:
-			err = s.shortHandlerGet(kind, w, r)
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Cache-Control", "max-age=0")
+			s.shortHandlerGet(kind, w, r)
 		default:
-			err = fmt.Errorf("%s is not supported", r.Method)
+			err := fmt.Errorf("%s is not supported", r.Method)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 		}
 	})
 }
 
-func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
-	if !conf.Auth.Enable {
+// blocklist holds the ip that should be blocked for further requests.
+//
+// This map may keep grow without releasing memory because of
+// continuously attempts. we also do not persist this type of block info
+// to the disk, which means if we reboot the service then all the blocker
+// are gone and they can attack the server again.
+// We clear the map very month.
+var blocklist sync.Map // map[string]*blockinfo{}
+
+func init() {
+	t := time.NewTicker(time.Hour * 24 * 30)
+	go func() {
+		for range t.C {
+			blocklist.Range(func(k, v interface{}) bool {
+				blocklist.Delete(k)
+				return true
+			})
+		}
+	}()
+}
+
+type blockinfo struct {
+	failCount int64
+	lastFail  atomic.Value // time.Time
+	blockTime atomic.Value // time.Duration
+}
+
+const maxFailureAttempts = 3
+
+func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (err error) {
+	if !config.Conf.Auth.Enable {
 		return nil
 	}
 
@@ -201,34 +96,99 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) error {
 	u, p, ok := r.BasicAuth()
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
-		return fmt.Errorf("%w: failed to parsing basic auth", errUnauthorized)
+		err = fmt.Errorf("%w: failed to parsing basic auth", errUnauthorized)
+		return
 	}
-	if u != conf.Auth.Username {
-		w.WriteHeader(http.StatusUnauthorized)
-		return fmt.Errorf("%w: username is invalid", errUnauthorized)
+
+	// check if the IP failure attempts are too much
+	// if so, direct abort the request without checking credentials
+	ip := utils.ReadIP(r)
+	if i, ok := blocklist.Load(ip); ok {
+		info := i.(*blockinfo)
+		count := atomic.LoadInt64(&info.failCount)
+		if count > maxFailureAttempts {
+			// if the ip is under block, then directly abort
+			last := info.lastFail.Load().(time.Time)
+			bloc := info.blockTime.Load().(time.Duration)
+
+			if time.Now().UTC().Sub(last.Add(bloc)) < 0 {
+				log.Printf("block ip %v, too much failure attempts. Block time: %v, release until: %v\n",
+					ip, bloc, last.Add(bloc))
+				err = fmt.Errorf("%w: too much failure attempts", errUnauthorized)
+				return
+			}
+
+			// clear the failcount, but increase the next block time
+			atomic.StoreInt64(&info.failCount, 0)
+			info.blockTime.Store(bloc * 2)
+		}
 	}
-	if p != conf.Auth.Password {
+
+	defer func() {
+		if !errors.Is(err, errUnauthorized) {
+			return
+		}
+
+		if i, ok := blocklist.Load(ip); !ok {
+			info := &blockinfo{
+				failCount: 1,
+			}
+			info.lastFail.Store(time.Now().UTC())
+			info.blockTime.Store(time.Second * 10)
+
+			blocklist.Store(ip, info)
+		} else {
+			info := i.(*blockinfo)
+			atomic.AddInt64(&info.failCount, 1)
+			info.lastFail.Store(time.Now().UTC())
+		}
+	}()
+
+	if u != config.Conf.Auth.Username {
 		w.WriteHeader(http.StatusUnauthorized)
-		return fmt.Errorf("%w: password is invalid", errUnauthorized)
+		err = fmt.Errorf("%w: username is invalid", errUnauthorized)
+		return
+	}
+	if p != config.Conf.Auth.Password {
+		w.WriteHeader(http.StatusUnauthorized)
+		err = fmt.Errorf("%w: password is invalid", errUnauthorized)
+		return
 	}
 	return nil
 }
 
 type shortInput struct {
-	Op    op          `json:"op"`
+	Op    short.Op    `json:"op"`
 	Alias string      `json:"alias"`
 	Data  interface{} `json:"data"`
+}
+
+type shortOutput struct {
+	Message string `json:"message"`
 }
 
 // shortHandlerPost handles all kinds of operations.
 // This is not a RESTful style, because we don't have that much router space
 // to use. We are currently limited the single index router, which is the /s.
-func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, r *http.Request) (err error) {
+func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			b, _ := json.Marshal(shortOutput{
+				Message: err.Error(),
+			})
+			w.Write(b)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}()
+
 	// All post request must be authenticated.
 	err = s.handleAuth(w, r)
 	if err != nil {
 		return
 	}
+
+	w.Header().Add("Content-Type", "application/json")
 
 	// Decode request body and determine what is the operator
 	d := json.NewDecoder(r.Body)
@@ -239,7 +199,7 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 	}
 
 	// Validating the operator and decode the redir data
-	if !op(red.Op).valid() {
+	if !short.Op(red.Op).Valid() {
 		err = errors.New("unsupported operator")
 		return
 	}
@@ -256,29 +216,39 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 	}
 
 	// Edit redirect data.
-	err = shortEdit(r.Context(), s.db, op(red.Op), red.Alias, &redir)
-	return
+	err = short.Edit(r.Context(), s.db, short.Op(red.Op), red.Alias, &redir)
 }
 
 // shortHandlerGet is the core of redir service. It redirects a given
 // alias to the actual destination.
-func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r *http.Request) (err error) {
+func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		if err != nil && !errors.Is(err, errUnauthorized) {
+			// Just redirect the user we could not find the record rather than
+			// throw 50x. The server logs should be able to identify the issue.
+			log.Printf("request err: %v\n", err)
+			http.Redirect(w, r, "/404.html", http.StatusTemporaryRedirect)
+		}
+	}()
+
 	ctx := r.Context()
 
 	// statistic page
 	var prefix string
 	switch kind {
 	case models.KindShort:
-		prefix = conf.S.Prefix
+		prefix = config.Conf.S.Prefix
 	case models.KindRandom:
-		prefix = conf.R.Prefix
+		prefix = config.Conf.R.Prefix
 	}
 
 	// Serve static files under ./.static/*. This should not conflict
 	// with all existing aliases, meaning that alias should not start
 	// with a dot.
 	if strings.HasPrefix(r.URL.Path, prefix+".static") {
-		return s.serveStatic(ctx, w, r, prefix)
+		err = s.serveStatic(ctx, w, r, prefix)
+		return
 	}
 
 	// Identify the alias of the short link.
@@ -287,18 +257,21 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	// If alias is empty, then process index page request.
 	if alias == "" {
 		err = s.sIndex(ctx, w, r, kind)
-		return err
+		return
 	}
 
 	// Only allow valid aliases.
-	if !validAlias.MatchString(alias) {
-		return errInvalidAlias
+	if !short.Validity.MatchString(alias) {
+		err = short.ErrInvalidAlias
+		return
 	}
 
 	// Process visitor information, wait maximum 5 seconds.
-	recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	s.recognizeVisitor(recordCtx, w, r, alias, kind)
+	if config.Conf.Stats.Enable {
+		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		s.recognizeVisitor(recordCtx, w, r, alias, kind)
+	}
 
 	// Figure out redirect location
 	red, ok := s.cache.Get(alias)
@@ -315,15 +288,15 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 
 	// Send a wait page if time does not permitting
 	if time.Now().UTC().Sub(red.ValidFrom.UTC()) < 0 {
-		return wTmpl.Execute(w, &struct {
+		err = wTmpl.Execute(w, &struct {
 			ValidFrom string
 			// no timezone, client should conver to local time.
 		}{red.ValidFrom.UTC().Format("2006-01-02T15:04:05")})
+		return
 	}
 
 	// Finally, let's redirect!
 	http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
-	return
 }
 
 func (s *server) serveStatic(
@@ -410,7 +383,7 @@ func (s *server) checkdb(ctx context.Context, alias string) (*models.Redir, erro
 func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, error) {
 
 	// construct the try path and make the request to vcs
-	repoPath := conf.X.RepoPath
+	repoPath := config.Conf.X.RepoPath
 	if strings.HasSuffix(repoPath, "/*") {
 		repoPath = strings.TrimSuffix(repoPath, "/*")
 	}
@@ -470,18 +443,22 @@ func (s *server) sIndex(
 ) error {
 	e := struct {
 		AdminView bool
+		StatsMode bool
 	}{
 		AdminView: false,
+		StatsMode: config.Conf.Stats.Enable,
 	}
 
 	mode := r.URL.Query().Get("mode")
 	switch mode {
 	case "stats": // stats data is public to everyone
-		err := s.statData(ctx, w, r, kind)
-		if !errors.Is(err, errInvalidStatParam) {
-			return err
+		if config.Conf.Stats.Enable {
+			err := s.statData(ctx, w, r, kind)
+			if !errors.Is(err, errInvalidStatParam) {
+				return err
+			}
+			log.Println(err)
 		}
-		log.Println(err)
 	case "index": // public visible index data
 		return s.indexData(ctx, w, r, kind, true)
 	case "index-pro": // data with statistics

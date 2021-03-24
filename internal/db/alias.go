@@ -22,7 +22,7 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"alias": r.Alias, "kind": r.Kind}
 
-	_, err = col.UpdateOne(ctx, filter, bson.M{"$set": bson.M{
+	ret, err := col.UpdateOne(ctx, filter, bson.M{"$setOnInsert": bson.M{
 		// do not use r directly, because it can clear object id.
 		"alias":      r.Alias,
 		"kind":       r.Kind,
@@ -33,6 +33,9 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	if err != nil {
 		err = fmt.Errorf("failed to insert given redirect: %w", err)
 		return
+	}
+	if ret.MatchedCount > 0 {
+		err = errors.New("alias is existed")
 	}
 	return
 }

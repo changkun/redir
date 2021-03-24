@@ -6,13 +6,13 @@ title: "Changkun Ou | changkun.de"
 host: https://changkun.de
 addr: :9123
 store: mongodb://localhost:27018
+cors: false
 s:
   prefix: /s/
-  allow_cors: true
 r:
   enable: true
-  length: 6
   prefix: /r/
+  length: 6
 x:
   enable: true
   prefix: /x/
@@ -23,3 +23,6 @@ auth:
   enable: true
   username: changkun
   password: redir
+stats:
+  enable: true
+  hide_ip: false

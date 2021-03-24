@@ -18,13 +18,13 @@ services:
     networks:
       - traefik_proxy
   mongo:
+    restart: always
     container_name: redirdb
     image: mongo:latest
     ports:
       - "27018:27017"
     volumes:
-      - ./data/mongo:/data/db
-    restart: always
+      - ../data/mongo:/data/db
     networks:
       - traefik_proxy
 networks:

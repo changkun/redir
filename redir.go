@@ -13,7 +13,9 @@ import (
 	"os"
 	"time"
 
+	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/models"
+	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/utils"
 )
 
@@ -39,10 +41,10 @@ examples:
 redir -s
 	Run the redir server
 
-redir -f ./import.yml
+redir -f ./template/import.yml
 	Import aliases from a file
 
-redir -d ./redir.yml
+redir -d ./template/export.yml
 	Dump all aliases from database and export in YAML format.
 
 redir -a changkun -l https://changkun.de
@@ -56,7 +58,6 @@ redir -op fetch -a changkun
 
 redir -op update -a changkun -l https://blog.changkun.de -p
 	The alias will not be listed in the index page
-	$ redir -op update -a changkun -l https://blog.changkun.de -p
 
 redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
 	The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
@@ -88,36 +89,36 @@ func main() {
 func runServer() {
 	s := newServer(context.Background())
 	s.registerHandler()
-	log.Printf("serving at %s\n", conf.Addr)
-	if err := http.ListenAndServe(conf.Addr, nil); err != nil {
-		log.Printf("ListenAndServe %s: %v\n", conf.Addr, err)
+	log.Printf("serving at %s\n", config.Conf.Addr)
+	if err := http.ListenAndServe(config.Conf.Addr, nil); err != nil {
+		log.Printf("ListenAndServe %s: %v\n", config.Conf.Addr, err)
 	}
 	s.close()
 }
 
 func runCmd() {
 	if *fromfile != "" {
-		importFile(*fromfile)
+		short.ImportFile(*fromfile)
 		return
 	}
 
 	if *dump != "" {
-		dumpFile(*dump)
+		short.DumpFile(*dump)
 		return
 	}
 
-	if !op(*operate).valid() {
+	if !short.Op(*operate).Valid() {
 		flag.Usage()
 		return
 	}
 
-	switch o := op(*operate); o {
-	case opCreate:
+	switch o := short.Op(*operate); o {
+	case short.OpCreate:
 		if *link == "" {
 			flag.Usage()
 			return
 		}
-	case opUpdate, opDelete, opFetch:
+	case short.OpUpdate, short.OpDelete, short.OpFetch:
 		if *alias == "" {
 			flag.Usage()
 			return
@@ -136,10 +137,10 @@ func runCmd() {
 			kind = models.KindRandom
 			// This might conflict with existing ones, it should be fine
 			// at the moment, the user of redir can always the command twice.
-			if conf.R.Length <= 0 {
-				conf.R.Length = 6
+			if config.Conf.R.Length <= 0 {
+				config.Conf.R.Length = 6
 			}
-			*alias = utils.Randstr(conf.R.Length)
+			*alias = utils.Randstr(config.Conf.R.Length)
 		}
 
 		t, err := time.Parse(time.RFC3339, *validt)
@@ -147,7 +148,7 @@ func runCmd() {
 			return
 		}
 
-		err = shortCmd(ctx, op(*operate), &models.Redir{
+		err = short.Cmd(ctx, short.Op(*operate), &models.Redir{
 			Alias:     *alias,
 			Kind:      kind,
 			URL:       *link,
