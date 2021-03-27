@@ -11,6 +11,7 @@ const uaparser = new UAParser()
 
 const Stats = (props) => {
   const today = new Date()
+  today.setDate(today.getDate() + 1)
   const start = new Date()
   start.setDate(today.getDate() - 30)
   const t0 = start.toISOString().slice(0, 10)

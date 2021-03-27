@@ -99,7 +99,7 @@ const RedirCreate = (props) => {
           message.error(data.message)
           return false
         }
-        message.success(`Short link ${window.location.pathname}/${values.alias} is created and have been saved to your clipboard!`, 10)
+        message.success(`Short link ${window.location.pathname}/${values.alias} is created and has been saved to your clipboard!`, 10)
         navigator.clipboard.writeText(`${window.location.host}${window.location.pathname}/${values.alias}`)
         ref.current.reload() // refresh table.
         return true
@@ -113,7 +113,7 @@ const RedirCreate = (props) => {
               message: 'Please input an alias',
             },
             {
-              pattern: /^[\w\-][\w\-. \/]+$/,
+              pattern: /^[\w-][\w\-. /]+$/,
               message: 'Please input a valid alias',
             },
           ]}

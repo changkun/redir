@@ -39,7 +39,7 @@ const Home = (props) => {
           <RedirTable isAdmin={props.isAdmin} statsMode={props.statsMode} refreshRef={tableRefresh}/>
         </div>
       </Content>
-      <Footer style={{ textAlign: 'center' }}>redir &copy; 2020-2021 Created by <a href='https://changkun.de'>Changkun Ou</a>. Open sourced under MIT license at <a href='https://changkun.de/s/redir'>GitHub</a>.</Footer>
+      <Footer style={{ textAlign: 'center' }}>redir &copy; 2020-2021 Created by <a href='https://changkun.de'>Changkun Ou</a>. Open sourced under MIT license on <a href='https://changkun.de/s/redir'>GitHub</a>.</Footer>
     </Layout>
   )
 }
