@@ -20,9 +20,6 @@ github.com/aws/aws-sdk-go/private/protocol/rest
 github.com/go-stack/stack
 # github.com/golang/snappy v0.0.1
 github.com/golang/snappy
-# github.com/google/uuid v1.2.0
-## explicit
-github.com/google/uuid
 # github.com/jmespath/go-jmespath v0.4.0
 github.com/jmespath/go-jmespath
 # github.com/klauspost/compress v1.9.5

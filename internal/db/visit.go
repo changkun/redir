@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"changkun.de/x/redir/internal/models"
-	"github.com/google/uuid"
+	"changkun.de/x/redir/internal/utils"
 )
 
 // RecordVisit records a visit event. If the visit is a new user, it returns
@@ -19,7 +19,11 @@ func (db *Store) RecordVisit(ctx context.Context, v *models.Visit) (string, erro
 
 	// if visitor ID does not present, then generate a new visitor ID.
 	if v.VisitorID == "" {
-		v.VisitorID = uuid.NewString()
+		id, err := utils.NewUUID()
+		if err != nil {
+			panic(err) // impossible unless system error.
+		}
+		v.VisitorID = id.String()
 	}
 
 	_, err := col.InsertOne(ctx, v)
