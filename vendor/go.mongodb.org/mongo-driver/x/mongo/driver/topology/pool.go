@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/address"
+	"go.mongodb.org/mongo-driver/mongo/address"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -137,6 +137,9 @@ func newPool(config poolConfig, connOpts ...ConnectionOption) (*pool, error) {
 	opts := connOpts
 	if config.MaxIdleTime != time.Duration(0) {
 		opts = append(opts, WithIdleTimeout(func(_ time.Duration) time.Duration { return config.MaxIdleTime }))
+	}
+	if config.PoolMonitor != nil {
+		opts = append(opts, withPoolMonitor(func(_ *event.PoolMonitor) *event.PoolMonitor { return config.PoolMonitor }))
 	}
 
 	var maxConns = config.MaxPoolSize
