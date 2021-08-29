@@ -132,7 +132,9 @@ func (db *Store) FetchAliasAll(
 	filter := bson.M{"kind": kind}
 	opts := []*options.FindOptions{
 		options.Find().SetLimit(pageSize),
-		options.Find().SetSkip((pageNum - 1) * pageSize)}
+		options.Find().SetSkip((pageNum - 1) * pageSize),
+		options.Find().SetSort(bson.D{primitive.E{Key: "$natural", Value: -1}}),
+	}
 	cur, err := col.Find(ctx, filter, opts...)
 	if err != nil {
 		return nil, 0, err
