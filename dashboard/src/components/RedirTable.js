@@ -113,7 +113,7 @@ const RedirTable = (props) => {
 
   let pageSize = 10
   const expandedRowRender = (params) => {
-    return <Stats alias={params.alias}/>
+    return <Stats alias={params.alias} devMode={props.devMode}/>
   }
   return (
     <ConfigProvider locale={enUS}>
@@ -126,10 +126,18 @@ const RedirTable = (props) => {
         expandable={props.isAdmin && props.statsMode ? { expandedRowRender } : false}
         request={async (params) => {
           const mode = props.isAdmin ? 'index-pro' : 'index'
-          const host = window.location.origin
-          const path = window.location.pathname.endsWith('/') ?
-            window.location.pathname.slice(0, -1) :
-            window.location.pathname;
+
+          let host = ''
+          let path = ''
+          if (props.devMode) {
+            host = 'http://localhost:9123'
+            path = '/s'
+          } else {
+            host = window.location.origin
+            path = window.location.pathname.endsWith('/') ?
+              window.location.pathname.slice(0, -1) :
+              window.location.pathname;
+          }
 
           const url = `${host}${path}/?mode=${mode}&pn=${params.current}&ps=${params.pageSize}`
           const resp = await fetch(url, {

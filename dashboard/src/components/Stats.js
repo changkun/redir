@@ -29,10 +29,17 @@ const Stats = (props) => {
     setT1(t1)
   }
 
+  let endpoint = '/s/?'
+  if (props.devMode) {
+    endpoint = 'http://localhost:9123/s/?'
+  }
+
+  console.log(begin, end)
+
   const [pvuvData, setPVUVData] = useState([])
   useEffect(() => asyncFetchTime(t0, t1), [])
   const asyncFetchTime = (t0, t1) => {
-    fetch('/s/?'+ new URLSearchParams({
+    fetch(endpoint+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'time',
@@ -51,7 +58,7 @@ const Stats = (props) => {
   const [refData, setRefData] = useState([])
   useEffect(() => asyncFetchRef(t0, t1), [])
   const asyncFetchRef = (t0, t1) => {
-    fetch('/s/?'+ new URLSearchParams({
+    fetch(endpoint+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'referer',
@@ -70,7 +77,7 @@ const Stats = (props) => {
   const [uaData, setUAData] = useState([])
   useEffect(() => {asyncFetchUA(t0, t1)}, [])
   const asyncFetchUA = (t0, t1) => {
-    fetch('/s/?'+ new URLSearchParams({
+    fetch(endpoint+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
       stat: 'ua',
@@ -139,11 +146,13 @@ const Stats = (props) => {
     return 0
   })
   const dateRangeOnChange = (_, dateString) => {
-    setT0(dateString[0])
-    setT1(dateString[1])
-    asyncFetchTime(t0, t1)
-    asyncFetchRef(t0, t1)
-    asyncFetchUA(t0, t1)
+    const d0 = dateString[0]
+    const d1 = dateString[1]
+    setT0(d0)
+    setT1(d1)
+    asyncFetchTime(d0, d1)
+    asyncFetchRef(d0, d1)
+    asyncFetchUA(d0, d1)
   }
   return (
     <div>
@@ -152,7 +161,7 @@ const Stats = (props) => {
         onBack={false}
         title="Visitors"
       />
-      <DatePicker.RangePicker style={{float: 'right', bottom: '5px'}} defaultValue={[moment(t0), moment(t1)]} onChange={dateRangeOnChange}/>
+      <DatePicker.RangePicker style={{float: 'right', bottom: '5px'}} defaultValue={[moment(begin), moment(end)]} onChange={dateRangeOnChange}/>
       <Divider />
       <StatLine alias={props.alias} data={pvuvData} t0={t0} t1={t1}/>
       <Row>

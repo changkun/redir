@@ -385,9 +385,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, err
 
 	// construct the try path and make the request to vcs
 	repoPath := config.Conf.X.RepoPath
-	if strings.HasSuffix(repoPath, "/*") {
-		repoPath = strings.TrimSuffix(repoPath, "/*")
-	}
+	repoPath = strings.TrimSuffix(repoPath, "/*")
 	tryPath := fmt.Sprintf("%s/%s", repoPath, alias)
 	resp, err := http.Get(tryPath)
 	if err != nil {
@@ -445,9 +443,11 @@ func (s *server) sIndex(
 	e := struct {
 		AdminView bool
 		StatsMode bool
+		DevMode   bool
 	}{
 		AdminView: false,
 		StatsMode: config.Conf.Stats.Enable,
+		DevMode:   false,
 	}
 
 	mode := r.URL.Query().Get("mode")

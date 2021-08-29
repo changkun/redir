@@ -11,9 +11,11 @@ const App = () => {
     const root = document.getElementById('root')
     const isAdmin = root.getAttribute('is-admin')
     const statsMode = root.getAttribute('stats-mode')
+    const devMode = root.getAttribute('dev-mode')
     return <Home
         isAdmin={isAdmin === 'true' ? true : false}
         statsMode={statsMode === 'true' ? true : false}
+        devMode={devMode === 'true' ? true : false}
     />
 }
 

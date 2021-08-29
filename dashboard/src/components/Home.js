@@ -36,7 +36,7 @@ const Home = (props) => {
           {props.isAdmin ? <RedirCreate refreshRef={tableRefresh}/> : <div></div>}
           </div>
 
-          <RedirTable isAdmin={props.isAdmin} statsMode={props.statsMode} refreshRef={tableRefresh}/>
+          <RedirTable isAdmin={props.isAdmin} statsMode={props.statsMode} devMode={props.devMode} refreshRef={tableRefresh}/>
         </div>
       </Content>
       <Footer style={{ textAlign: 'center' }}>redir &copy; 2020-2021 Created by <a href='https://changkun.de'>Changkun Ou</a>. Open sourced under MIT license on <a href='https://changkun.de/s/redir'>GitHub</a>.</Footer>
