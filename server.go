@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"changkun.de/x/redir/internal/cache"
 	"changkun.de/x/redir/internal/config"
@@ -59,9 +60,11 @@ func newServer(ctx context.Context) *server {
 		log.Fatalf("cannot access sub file system: %v", err)
 	}
 
-	db, err := db.NewStore(context.Background(), config.Conf.Store)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	db, err := db.NewStore(ctx, config.Conf.Store)
 	if err != nil {
-		log.Fatalf("cannot establish connection to %s, details: \n\n%v",
+		log.Fatalf("cannot establish connection to %s, details: \n%v",
 			config.Conf.Store, err)
 	}
 	log.Printf("connected to %s", config.Conf.Store)
