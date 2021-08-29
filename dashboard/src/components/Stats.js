@@ -152,7 +152,7 @@ const Stats = (props) => {
         onBack={false}
         title="Visitors"
       />
-      <DatePicker.RangePicker style={{float: 'right'}} defaultValue={[moment(t0), moment(t1)]} onChange={dateRangeOnChange}/>
+      <DatePicker.RangePicker style={{float: 'right', bottom: '5px'}} defaultValue={[moment(t0), moment(t1)]} onChange={dateRangeOnChange}/>
       <Divider />
       <StatLine alias={props.alias} data={pvuvData} t0={t0} t1={t1}/>
       <Row>
