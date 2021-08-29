@@ -35,6 +35,7 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 
 		// for development.
 		if config.Conf.CORS {
+			log.Println("CORS is activated.")
 			w.Header().Set("Access-Control-Allow-Headers", "*")
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
