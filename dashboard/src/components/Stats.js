@@ -3,9 +3,10 @@
 // license that can be found in the LICENSE file.
 
 import React, { useState, useEffect } from 'react'
-import { Row, Col, PageHeader, Divider } from 'antd';
+import { Row, Col, PageHeader, Divider, DatePicker } from 'antd';
 import { Line, Pie, Bar } from '@ant-design/charts'
 import UAParser from 'ua-parser-js'
+import moment from 'moment';
 
 const uaparser = new UAParser()
 
@@ -14,12 +15,23 @@ const Stats = (props) => {
   today.setDate(today.getDate() + 1)
   const start = new Date()
   start.setDate(today.getDate() - 30)
-  const t0 = start.toISOString().slice(0, 10)
-  const t1 = today.toISOString().slice(0, 10)
+  let begin = start.toISOString().slice(0, 10)
+  let end = today.toISOString().slice(0, 10)
+
+  const [t0, setT0] = useState([])
+  useEffect(() => updateT0(begin), [])
+  const updateT0 = (t0) => {
+    setT0(t0)
+  }
+  const [t1, setT1] = useState([])
+  useEffect(() => updateT1(end), [])
+  const updateT1 = (t1) => {
+    setT1(t1)
+  }
 
   const [pvuvData, setPVUVData] = useState([])
-  useEffect(() => asyncFetchTime(), [])
-  const asyncFetchTime = () => {
+  useEffect(() => asyncFetchTime(t0, t1), [])
+  const asyncFetchTime = (t0, t1) => {
     fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
@@ -37,8 +49,8 @@ const Stats = (props) => {
     })
   }
   const [refData, setRefData] = useState([])
-  useEffect(() => asyncFetchRef(), [])
-  const asyncFetchRef = () => {
+  useEffect(() => asyncFetchRef(t0, t1), [])
+  const asyncFetchRef = (t0, t1) => {
     fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
@@ -56,8 +68,8 @@ const Stats = (props) => {
     })
   }
   const [uaData, setUAData] = useState([])
-  useEffect(() => {asyncFetchUA()}, [])
-  const asyncFetchUA = () => {
+  useEffect(() => {asyncFetchUA(t0, t1)}, [])
+  const asyncFetchUA = (t0, t1) => {
     fetch('/s/?'+ new URLSearchParams({
       mode: 'stats',
       a: props.alias,
@@ -126,33 +138,37 @@ const Stats = (props) => {
     if (a.value > b.value) return -1
     return 0
   })
-
+  const dateRangeOnChange = (_, dateString) => {
+    setT0(dateString[0])
+    setT1(dateString[1])
+    asyncFetchTime(t0, t1)
+    asyncFetchRef(t0, t1)
+    asyncFetchUA(t0, t1)
+  }
   return (
     <div>
       <PageHeader
         className="site-page-header"
         onBack={false}
         title="Visitors"
-        subTitle="Last 30 Days"
       />
-      <StatLine alias={props.alias} data={pvuvData}/>
+      <DatePicker.RangePicker style={{float: 'right'}} defaultValue={[moment(t0), moment(t1)]} onChange={dateRangeOnChange}/>
       <Divider />
+      <StatLine alias={props.alias} data={pvuvData} t0={t0} t1={t1}/>
       <Row>
         <Col span={12}>
           <PageHeader
             className="site-page-header"
             title="Referrers"
-            subTitle="Last 30 Days"
           />
-          <StatPieRef data={refData}/>
+          <StatPieRef data={refData} t0={t0} t1={t1}/>
         </Col>
         <Col span={12}>
           <PageHeader
             className="site-page-header"
             title="Browsers"
-            subTitle="Last 30 Days"
           />
-          <StatBarUA data={browserArray}/>
+          <StatBarUA data={browserArray} t0={t0} t1={t1}/>
         </Col>
       </Row>
       <Divider />
@@ -161,9 +177,8 @@ const Stats = (props) => {
         <PageHeader
           className="site-page-header"
           title="Devices"
-          subTitle="Last 30 Days"
         />
-        <StatBarUA data={deviceArray}/>
+        <StatBarUA data={deviceArray} t0={t0} t1={t1}/>
       </Col>
       </Row>
       <Divider />
@@ -185,12 +200,8 @@ const dateRange = (startDate, endDate, steps = 1) => {
 }
 
 const StatLine = (props) => {
-  const today = new Date()
-  const start = new Date()
-  start.setDate(today.getDate() - 30)
-
-  const begin = formatDate(start)
-  const end = formatDate(today)
+  const begin = props.t0
+  const end = props.t1  
   const pv = dateRange(begin, end)
   const uv = dateRange(begin, end)
   for (let i = 0; i < props.data.length; i++) {
