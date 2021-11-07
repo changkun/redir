@@ -195,6 +195,7 @@ const RedirTable = (props) => {
           type: 'multiple',
           deletePopconfirmMessage: 'Are your sure?',
           editableKeys,
+          actionRender: (row, config, defaultDom) => [defaultDom.save, defaultDom.cancel, defaultDom.delete],
           onSave: async (alias, row) => {
             await waitTime(20)
 

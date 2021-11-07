@@ -4,6 +4,9 @@ license that can be found in the LICENSE file. */
 
 @import '~antd/dist/antd.dark.css';
 
+.ant-pro-core-label-tip {
+    display: flex;
+}
 .ant-pro-core-label-tip-icon {
     margin-left: 5px;
 }
