@@ -5,9 +5,11 @@ license that can be found in the LICENSE file. -->
 <!DOCTYPE html>
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 html, body {
-    font-family: monospace;
+    font-family: sans-serif, monospace;
     height: 100%;
     background-color: #333;
 }
@@ -50,7 +52,13 @@ footer {
 }
 a {
     text-decoration: none;
-    color: rgba(0, 128, 255, 255);
+    color: #aaa;
+}
+a:visited {
+    color: #aaa;
+}
+a:hover {
+    color: #3c9ae8;
 }
 #countdown {
     font-size: 5em;
@@ -60,14 +68,25 @@ a {
 </head><body>
 
 <div class="flex-container">
-    <div class="row"> 
+    <div class="row">
         <div class="flex-item">The link will be available in:</div></br></br>
         <div id="countdown" class="flex-item"></div></br></br>
         <div class="flex-item">at</div></br></br>
         <div id="absolute-time" class="flex-item"></div>
     </div>
 </div>
-<footer>redir &copy; 2021 Created by <a href="https://changkun.de">Changkun Ou</a>. Open sourced under MIT license at <a href="https://changkun.de/s/redir">GitHub</a>.</footer>
+<footer>
+{{ if .ShowImpressum }}
+<a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowPrivacy }}
+<a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowContact }}
+<a href="/s/.contact">Contact</a><br/><br/>
+{{ end }}
+<a href="/s">redir</a> &copy; 2021 Created by Changkun Ou.
+</footer>
 <script>
 const calcTime = (countDownDate) => {
     const now = new Date().getTime()

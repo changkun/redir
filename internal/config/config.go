@@ -5,10 +5,15 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"log"
 	"os"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,8 +46,22 @@ type config struct {
 	} `yaml:"auth"`
 	Stats struct {
 		Enable bool `yaml:"enable"`
-		HideIP bool `yaml:"hide_ip"`
 	} `yaml:"stats"`
+	GDPR struct {
+		HideIP  bool `yaml:"hide_ip"`
+		Contact struct {
+			Enable bool   `yaml:"enable"`
+			Email  string `yaml:"email"`
+		} `yaml:"contact"`
+		Impressum struct {
+			Enable  bool   `yaml:"enable"`
+			Content string `yaml:"content"`
+		} `yaml:"impressum"`
+		Privacy struct {
+			Enable  bool   `yaml:"enable"`
+			Content string `yaml:"content"`
+		} `yaml:"privacy"`
+	} `yaml:"gdpr"`
 }
 
 //go:embed config.yml
@@ -62,6 +81,18 @@ func (c *config) parse() {
 	if err != nil {
 		log.Fatalf("cannot parse configuration: %v\n", err)
 	}
+
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(Conf.GDPR.Impressum.Content), &buf); err != nil {
+		log.Fatalf("cannot parse impressum markdown content: %v\n", err)
+	}
+	Conf.GDPR.Impressum.Content = buf.String()
+	buf.Reset()
+
+	if err := md.Convert([]byte(Conf.GDPR.Privacy.Content), &buf); err != nil {
+		log.Fatalf("cannot parse privacy markdown content: %v\n", err)
+	}
+	Conf.GDPR.Privacy.Content = buf.String()
 }
 
 var Conf config
@@ -69,3 +100,15 @@ var Conf config
 func init() {
 	Conf.parse()
 }
+
+var md = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(
+		parser.WithAutoHeadingID(),
+	),
+	goldmark.WithRendererOptions(
+		html.WithHardWraps(),
+		html.WithXHTML(),
+		html.WithUnsafe(),
+	),
+)

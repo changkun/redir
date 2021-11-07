@@ -27,8 +27,7 @@ import (
 // This implementation is derived from gin-gonic/gin.
 func ReadIP(r *http.Request) (ip string) {
 	defer func() {
-		// GDPR friendly stuff
-		if config.Conf.Stats.HideIP {
+		if config.Conf.GDPR.HideIP {
 			hh := sha1.New()
 			io.WriteString(hh, ip)
 			ip = fmt.Sprintf("%x", hh.Sum(nil))

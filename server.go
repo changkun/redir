@@ -30,7 +30,13 @@ var (
 	//go:embed templates/x.html
 	xtmpl string
 	//go:embed templates/wait.html
-	wtmpl string
+	waittmpl string
+	//go:embed templates/impressum.html
+	impressumtmpl string
+	//go:embed templates/privacy.html
+	privacytmpl string
+	//go:embed templates/contact.html
+	contacttmpl string
 	//go:embed dashboard/build/index.html
 	dtmpl string
 	//go:embed dashboard/build/static/*
@@ -38,10 +44,13 @@ var (
 )
 
 var (
-	xTmpl   *template.Template
-	wTmpl   *template.Template
-	dTmpl   *template.Template
-	statics fs.FS
+	xTmpl         *template.Template
+	waitTmpl      *template.Template
+	impressumTmpl *template.Template
+	privacyTmpl   *template.Template
+	contactTmpl   *template.Template
+	dTmpl         *template.Template
+	statics       fs.FS
 )
 
 func init() {
@@ -51,9 +60,13 @@ func init() {
 }
 
 func newServer(ctx context.Context) *server {
-	xTmpl = template.Must(template.New("xtmpl").Parse(xtmpl))
-	wTmpl = template.Must(template.New("wtmpl").Parse(wtmpl))
-	dTmpl = template.Must(template.New("stmpl").Parse(dtmpl))
+	xTmpl = template.Must(template.New("xTmpl").Parse(xtmpl))
+	waitTmpl = template.Must(template.New("waitTmpl").Parse(waittmpl))
+	impressumTmpl = template.Must(template.New("impressumTmpl").Parse(impressumtmpl))
+	privacyTmpl = template.Must(template.New("privacyTmpl").Parse(privacytmpl))
+	contactTmpl = template.Must(template.New("contactTmpl").Parse(contacttmpl))
+	dTmpl = template.Must(template.New("sTmpl").Parse(dtmpl))
+
 	var err error
 	statics, err = fs.Sub(sasse, "dashboard/build/static")
 	if err != nil {

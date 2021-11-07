@@ -1,0 +1,55 @@
+<!-- Copyright 2021 Changkun Ou. All rights reserved.
+Use of this source code is governed by a MIT
+license that can be found in the LICENSE file. -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>redir - Contact</title>
+<style>
+html, body {
+    font-family: sans-serif, monospace;
+    background-color: #333;
+    overflow: hidden;
+}
+body {
+    color: #aaa;
+    margin: 30px 40px 30px;
+}
+a {
+    text-decoration: none;
+    color: #aaa;
+}
+a:visited {
+    color: #aaa;
+}
+a:hover {
+    color: #3c9ae8;
+}
+footer {
+    position: absolute;
+    bottom: 2%;
+}
+</style>
+</head>
+<body>
+
+{{.Body}}
+
+<footer>
+{{ if .ShowImpressum }}
+<a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowPrivacy }}
+<a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowContact }}
+<a href="/s/.contact">Contact</a><br/><br/>
+{{ end }}
+<a href="/s">redir</a> &copy; 2021 Created by Changkun Ou.
+</footer>
+</body>
+</html>

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -244,10 +245,8 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 		prefix = config.Conf.R.Prefix
 	}
 
-	// Serve static files under ./.static/*. This should not conflict
-	// with all existing aliases, meaning that alias should not start
-	// with a dot.
-	if strings.HasPrefix(r.URL.Path, prefix+".static") {
+	// URLs with /s/.* is reserved for internal usage.
+	if strings.HasPrefix(r.URL.Path, prefix+".") {
 		err = s.serveStatic(ctx, w, r, prefix)
 		return
 	}
@@ -289,15 +288,26 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 
 	// Send a wait page if time does not permitting
 	if time.Now().UTC().Sub(red.ValidFrom.UTC()) < 0 {
-		err = wTmpl.Execute(w, &struct {
-			ValidFrom string
-			// no timezone, client should conver to local time.
-		}{red.ValidFrom.UTC().Format("2006-01-02T15:04:05")})
+		err = waitTmpl.Execute(w, &pageInfo{
+			ValidFrom:     red.ValidFrom.UTC().Format("2006-01-02T15:04:05"),
+			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+			ShowContact:   config.Conf.GDPR.Contact.Enable,
+		})
 		return
 	}
 
 	// Finally, let's redirect!
 	http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
+}
+
+type pageInfo struct {
+	ValidFrom     string
+	Body          template.HTML
+	Email         string
+	ShowImpressum bool
+	ShowPrivacy   bool
+	ShowContact   bool
 }
 
 func (s *server) serveStatic(
@@ -306,23 +316,67 @@ func (s *server) serveStatic(
 	r *http.Request,
 	prefix string,
 ) error {
-	ext := filepath.Ext(r.URL.Path)
-	switch ext {
-	case ".css":
-		w.Header().Add("Content-Type", "text/css")
-	case ".js":
-		w.Header().Add("Content-Type", "text/javascript")
-	}
+	var (
+		t *template.Template
+		d *pageInfo
+	)
+	switch {
+	case strings.HasPrefix(r.URL.Path, prefix+".static"):
+		// Serve static files under ./.static/*. This should not conflict
+		// with all existing aliases, meaning that alias should not start
+		// with a dot.
+		ext := filepath.Ext(r.URL.Path)
+		switch ext {
+		case ".css":
+			w.Header().Add("Content-Type", "text/css")
+		case ".js":
+			w.Header().Add("Content-Type", "text/javascript")
+		}
 
-	f, err := statics.Open(strings.TrimPrefix(r.URL.Path, prefix+".static/"))
-	if err != nil {
+		f, err := statics.Open(strings.TrimPrefix(r.URL.Path, prefix+".static/"))
+		if err != nil {
+			return err
+		}
+		b, err := io.ReadAll(f)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
 		return err
+	case strings.HasPrefix(r.URL.Path, prefix+".impressum"):
+		if config.Conf.GDPR.Impressum.Enable {
+			t = impressumTmpl
+		}
+		d = &pageInfo{
+			Body:          template.HTML(config.Conf.GDPR.Impressum.Content),
+			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+			ShowContact:   config.Conf.GDPR.Contact.Enable,
+		}
+	case strings.HasPrefix(r.URL.Path, prefix+".privacy"):
+		if config.Conf.GDPR.Privacy.Enable {
+			t = privacyTmpl
+		}
+		d = &pageInfo{
+			Body:          template.HTML(config.Conf.GDPR.Privacy.Content),
+			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+			ShowContact:   config.Conf.GDPR.Contact.Enable,
+		}
+	case strings.HasPrefix(r.URL.Path, prefix+".contact"):
+		if config.Conf.GDPR.Contact.Enable {
+			t = contactTmpl
+		}
+		d = &pageInfo{
+			Email:         config.Conf.GDPR.Contact.Email,
+			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+			ShowContact:   config.Conf.GDPR.Contact.Enable,
+		}
 	}
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return err
+	if t != nil {
+		return t.Execute(w, d)
 	}
-	w.Write(b)
 	return nil
 }
 
