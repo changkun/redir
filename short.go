@@ -504,6 +504,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, err
 		Kind:      models.KindShort,
 		URL:       tryPath,
 		Private:   false,
+		Trust:     false,
 		ValidFrom: time.Now().UTC(),
 	}
 	err = s.db.StoreAlias(ctx, r)

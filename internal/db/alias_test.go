@@ -25,6 +25,7 @@ func prepare(ctx context.Context, t *testing.T) *db.Store {
 		Kind:    models.KindShort,
 		URL:     "link",
 		Private: false,
+		Trust:   false,
 	})
 	if err != nil {
 		t.Fatalf("cannot store alias to data store: %v\n", err)
