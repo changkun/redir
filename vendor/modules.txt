@@ -38,6 +38,17 @@ github.com/xdg-go/scram
 github.com/xdg-go/stringprep
 # github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d
 github.com/youmark/pkcs8
+# github.com/yuin/goldmark v1.4.2
+## explicit
+github.com/yuin/goldmark
+github.com/yuin/goldmark/ast
+github.com/yuin/goldmark/extension
+github.com/yuin/goldmark/extension/ast
+github.com/yuin/goldmark/parser
+github.com/yuin/goldmark/renderer
+github.com/yuin/goldmark/renderer/html
+github.com/yuin/goldmark/text
+github.com/yuin/goldmark/util
 # go.mongodb.org/mongo-driver v1.5.1
 ## explicit
 go.mongodb.org/mongo-driver/bson
