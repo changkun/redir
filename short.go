@@ -495,13 +495,19 @@ func (s *server) sIndex(
 	kind models.AliasKind,
 ) error {
 	e := struct {
-		AdminView bool
-		StatsMode bool
-		DevMode   bool
+		AdminView     bool
+		StatsMode     bool
+		DevMode       bool
+		ShowImpressum bool
+		ShowPrivacy   bool
+		ShowContact   bool
 	}{
-		AdminView: false,
-		StatsMode: config.Conf.Stats.Enable,
-		DevMode:   false,
+		AdminView:     false,
+		StatsMode:     config.Conf.Stats.Enable,
+		DevMode:       config.Conf.Development,
+		ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+		ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+		ShowContact:   config.Conf.GDPR.Contact.Enable,
 	}
 
 	mode := r.URL.Query().Get("mode")

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-import { useRef } from 'react'
+import { useRef, Fragment } from 'react'
 import { Layout, Row, Col } from 'antd'
 import RedirTable from './RedirTable'
 import RedirCreate from './RedirCreate'
@@ -39,7 +39,14 @@ const Home = (props) => {
           <RedirTable isAdmin={props.isAdmin} statsMode={props.statsMode} devMode={props.devMode} refreshRef={tableRefresh}/>
         </div>
       </Content>
-      <Footer style={{ textAlign: 'center' }}>redir &copy; 2020-2021 Created by <a href='https://changkun.de'>Changkun Ou</a>. Open sourced under MIT license on <a href='https://changkun.de/s/redir'>GitHub</a>.</Footer>
+      <Footer style={{ textAlign: 'center' }}>
+        <div>
+        {props.showImpressum ? <span><a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;</span> : ''}
+        {props.showPrivacy ? <span><a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;</span> : ''}
+        {props.showContact ? <span><a href="/s/.contact">Contact</a></span> : ''}
+        </div>
+        <div> &copy; 2021 Created by Changkun Ou.</div>
+      </Footer>
     </Layout>
   )
 }

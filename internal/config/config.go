@@ -18,12 +18,13 @@ import (
 )
 
 type config struct {
-	Title string `yaml:"title"`
-	Host  string `yaml:"host"`
-	Addr  string `yaml:"addr"`
-	Store string `yaml:"store"`
-	CORS  bool   `yaml:"cors"`
-	S     struct {
+	Title       string `yaml:"title"`
+	Host        string `yaml:"host"`
+	Addr        string `yaml:"addr"`
+	Development bool   `yaml:"development"`
+	Store       string `yaml:"store"`
+	CORS        bool   `yaml:"cors"`
+	S           struct {
 		Prefix string `yaml:"prefix"`
 	} `yaml:"s"`
 	R struct {
