@@ -1,20 +1,21 @@
-# redir [![Latest relsease](https://img.shields.io/github/v/tag/changkun/redir?label=latest)](https://github.com/changkun/redir/releases) [![PkgGoDev](https://pkg.go.dev/badge/changkun.de/x/redir)](https://pkg.go.dev/changkun.de/x/redir) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
+# redir [![Latest relsease](https://img.shields.io/github/v/tag/changkun/redir?label=latest)](https://github.com/changkun/redir/releases) ![](https://changkun.de/urlstat?mode=github&repo=changkun/redir)
 
-Self-hosted URL shortener.
+Full-featured, self-hosted URL shortener written in Go.
 
 ## Features
 
 - **Custom domain**: everything is under control with your own domain
-- **Link shortner**: support `/s/semantic-name` for short semantic alias and `/r/random-str` for anonymous shortening
+- **Link shortener**: support `/s/semantic-name` for short semantic alias and `/r/random-str` for anonymous shortening
 - **Go [Vanity Import](https://golang.org/cmd/go/#hdr-Remote_import_paths)**: redirect `/x/repo-name` to configured VCS and `pkg.go.dev` for API documentation
 - **Access control**
-  + Private links will not be listed in public index page
+  + Private links won't be listed in public index page
   + Allow link to be accessible only after a configured time point
+  + Allow link to be expire after a configured time point
+  + Allow warn to visitors about external URL redirects (for liability control)
 - **Public indexes**: `/s`
 - **Admin dashboard**: `/s?mode=admin`
 - **Visitor analysis**: Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc
-- **Privacy**: GDPR friendly
-- ... and more
+- **GDPR friendly**: Including impressum, privacy, contact pages; optional warning about external redirects, etc.
 
 ## Web Interfaces
 
@@ -50,9 +51,13 @@ will connect to the default database address mongodb://localhost:27018.
 It is possible to reconfig redir using an external configuration file.
 See https://changkun.de/s/redir for more details.
 
+Version: dev
+
+GoVersion: devel go1.18-39e08c6cd7 Tue Sep 21 13:18:09 2021 +0000
+
 Command line usage:
 
-$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -trust -vt <time>]
 
 options:
   -a string
@@ -67,6 +72,8 @@ options:
         Operators, create/update/delete/fetch (default "create")
   -p    The link is private and will not be listed in the index page, avaliable for operator create/update
   -s    Run redir server
+  -trust
+        The link is either trusted to not show privacy warning page or untrusted to show privacy warning page for external redirects
   -vt string
         the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update
 
@@ -92,8 +99,11 @@ redir -op fetch -a changkun
 redir -op update -a changkun -l https://blog.changkun.de -p
         The alias will not be listed in the index page
 
+redir -op update -a changkun -l https://blog.changkun.de -p -trust
+        The alias will not be listed in the index page and will always do the redirect without showing privacy warning
+
 redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
-        The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
+        The alias will be accessible starts from 2022-01-01T00:00:00+08:00
 
 redir -op delete -a changkun
         Delete the alias from database
@@ -154,7 +164,7 @@ The GET request query parameters of `/s` and `/r` are listed as follows:
     - `ps`, page size
     - `pn`, page number
   + `stats` mode
-    - `a`, alias for stat data 
+    - `a`, alias for stat data
     - `stat`, possible options: `referer`, `ua`, `time`
       - `t0`, start time
       - `t1`, end time

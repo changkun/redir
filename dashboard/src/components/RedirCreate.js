@@ -46,7 +46,7 @@ const rfc3339 = (datestr) => {
       pad(d.getDate()) + "T" +
       pad(d.getHours()) + ":" +
       pad(d.getMinutes()) + ":" +
-      pad(d.getSeconds()) + 
+      pad(d.getSeconds()) +
       timezoneOffset(d.getTimezoneOffset());
 }
 
@@ -90,6 +90,7 @@ const RedirCreate = (props) => {
               alias: values.alias,
               url: values.url,
               private: values.private === 'true' ? true : false,
+              trust: values.trust === 'true' ? true : false,
               valid_from: rfc3339(values.valid_from),
             }
           })
@@ -121,7 +122,7 @@ const RedirCreate = (props) => {
           name="alias"
           label="Alias"
           placeholder="Please input an alias"
-          tooltip="A meaningful alias can help visitor recognize the content behind the link directly."
+          tooltip="A meaningful alias can help visitor recognize the content behind the link directly. Example: alias 'example' represents /s/example router."
         />
       </ProForm.Group>
       <ProForm.Group>
@@ -145,27 +146,43 @@ const RedirCreate = (props) => {
       </ProForm.Group>
       <ProForm.Group>
       <ProFormSelect
-          options={[{
-              value: 'false',
-              label: 'Public',
-            },
-            {
-              value: 'true',
-              label: 'Private',
-            },
-          ]}
-          width="xs"
-          name="private"
-          label="Visibility"
-          placeholder="Please select visibility"
-          tooltip="Public alias will be listed on the public index page (Default: Public)."
-        />
-        <ProFormDateTimePicker
-          name="valid_from"
-          label="Valid from"
-          placeholder="Please select accessible time"
-          tooltip="The shortened link is avaliable since the time you specified. Before the specified time, the link shows a countdown page."
-        />
+        options={[{
+            value: 'false',
+            label: 'Public',
+          },
+          {
+            value: 'true',
+            label: 'Private',
+          },
+        ]}
+        width="xs"
+        name="private"
+        label="Visibility"
+        placeholder="Please select visibility"
+        tooltip="Public alias will be listed on the public index page (Default: Public)."
+      />
+      <ProFormSelect
+        options={[{
+            value: 'false',
+            label: 'Untrusted',
+          },
+          {
+            value: 'true',
+            label: 'Trusted',
+          },
+        ]}
+        width="xs"
+        name="trust"
+        label="Trustable"
+        placeholder="Please select visibility"
+        tooltip="Trusted alias will skip the privacy warning regarding external links to the visitor. Same origin URLs will always conduct the redirects and do not effected by this field (Default: Untrusted)."
+      />
+      <ProFormDateTimePicker
+        name="valid_from"
+        label="Valid from"
+        placeholder="Please select accessible time"
+        tooltip="The shortened link is avaliable since the time specified. Before the specified time, the link shows a countdown page."
+      />
       </ProForm.Group>
     </ModalForm>
     </ConfigProvider>

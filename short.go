@@ -88,9 +88,9 @@ type blockinfo struct {
 
 const maxFailureAttempts = 3
 
-func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (err error) {
+func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (user, pass string, err error) {
 	if !config.Conf.Auth.Enable {
-		return nil
+		return
 	}
 
 	w.Header().Set("WWW-Authenticate", `Basic realm="redir"`)
@@ -146,17 +146,18 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (err error) 
 		}
 	}()
 
-	if u != config.Conf.Auth.Username {
-		w.WriteHeader(http.StatusUnauthorized)
-		err = fmt.Errorf("%w: username is invalid", errUnauthorized)
-		return
+	found := false
+	for _, account := range config.Conf.Auth.Accounts {
+		if u == account.Username && p == account.Password {
+			found = true
+			break
+		}
 	}
-	if p != config.Conf.Auth.Password {
+	if !found {
 		w.WriteHeader(http.StatusUnauthorized)
-		err = fmt.Errorf("%w: password is invalid", errUnauthorized)
-		return
+		return "", "", fmt.Errorf("%w: username or password is invalid", errUnauthorized)
 	}
-	return nil
+	return u, p, nil
 }
 
 type shortInput struct {
@@ -185,7 +186,7 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 	}()
 
 	// All post request must be authenticated.
-	err = s.handleAuth(w, r)
+	user, _, err := s.handleAuth(w, r)
 	if err != nil {
 		return
 	}
@@ -216,9 +217,14 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 	if err != nil {
 		return
 	}
+	redir.UpdatedBy = user
 
 	// Edit redirect data.
 	err = short.Edit(r.Context(), s.db, short.Op(red.Op), red.Alias, &redir)
+	if err == nil {
+		// Flush the cache so that the changes can be effected immediately.
+		s.cache.Flush()
+	}
 }
 
 // shortHandlerGet is the core of redir service. It redirects a given
@@ -297,11 +303,44 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 		return
 	}
 
+	// Send a warn page if the redirected link is an external link
+	//
+	// If the link configuring person thinks the redirected link is trustable,
+	// do the redirects always.
+	if !red.Trust {
+		// Figure out if the user allow redirects always
+		allowRedir := false
+		cookie, _ := r.Cookie(redirAllowCookie)
+		if cookie != nil {
+			n, _ := strconv.Atoi(cookie.Value)
+			if n == 1 {
+				allowRedir = true
+			}
+		}
+
+		// If a redirect is accidentally configured as non-trustable,
+		// but still an internal website, then we don't show the warn page.
+		if !allowRedir && !strings.Contains(red.URL, r.Host) {
+			err = warnTmpl.Execute(w, &pageInfo{
+				OwnerName:     config.Conf.GDPR.Owner.Name,
+				OwnerDomain:   config.Conf.GDPR.Owner.Domain,
+				URL:           red.URL,
+				ShowImpressum: config.Conf.GDPR.Impressum.Enable,
+				ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
+				ShowContact:   config.Conf.GDPR.Contact.Enable,
+			})
+			return
+		}
+	}
+
 	// Finally, let's redirect!
 	http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
 }
 
 type pageInfo struct {
+	OwnerName     string
+	OwnerDomain   string
+	URL           string
 	ValidFrom     string
 	Body          template.HTML
 	Email         string
@@ -380,7 +419,10 @@ func (s *server) serveStatic(
 	return nil
 }
 
-const redirVidCookie = "redir_vid"
+const (
+	redirVidCookie   = "redir_vid"
+	redirAllowCookie = "redir_allow"
+)
 
 // recognizeVisitor implements a best effort visitor recording.
 //
@@ -525,7 +567,7 @@ func (s *server) sIndex(
 	case "index-pro": // data with statistics
 		return s.indexData(ctx, w, r, kind, false)
 	case "admin":
-		err := s.handleAuth(w, r)
+		_, _, err := s.handleAuth(w, r)
 		if err != nil {
 			return err
 		}
@@ -557,7 +599,7 @@ func (s *server) indexData(
 	public bool,
 ) error {
 	if !public {
-		err := s.handleAuth(w, r)
+		_, _, err := s.handleAuth(w, r)
 		if err != nil {
 			return err
 		}

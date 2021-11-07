@@ -22,12 +22,16 @@ x:
   godoc_host: https://pkg.go.dev/
 auth:
   enable: true
-  username: changkun
-  password: redir
+  accounts:
+    - username: changkun
+      password: redir
 stats:
   enable: true
 gdpr:
   hide_ip: false
+  owner:
+    name: changkun.de
+    domain: https://changkun.de
   contact:
     enable: true
     email: contact@changkun.de

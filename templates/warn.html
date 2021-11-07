@@ -1,0 +1,141 @@
+<!-- Copyright 2021 Changkun Ou. All rights reserved.
+Use of this source code is governed by a MIT
+license that can be found in the LICENSE file. -->
+
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+html, body {
+    font-family: sans-serif, monospace;
+    overflow: hidden;
+    background-color: #333;
+    color: #aaa;
+}
+body {
+    margin: 0;
+    padding: 20px 40px 20px;
+}
+a {
+    color: #3c9ae8;
+    word-break: break-all;
+    text-decoration: none;
+}
+a:visited {
+    color: #3c9ae8;
+    text-decoration: none;
+}
+a:hover {
+    color: #15395b;
+    text-decoration: none;
+}
+
+button {
+    margin-right: 8px;
+    margin-bottom: 12px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    user-select: none;
+    touch-action: manipulation;
+    height: 32px;
+    padding: 4px 15px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all .3s cubic-bezier(.645,.045,.355,1);
+}
+.btn-primary {
+    color: #eee;
+    border-color: #1890ff;
+    background: #1890ff;
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 12%);
+    box-shadow: 0 2px #0000000b;
+}
+.btn-primary a:visited {
+    color: #eee;
+    text-decoration: none;
+}
+.btn-default {
+    line-height: 1.5715;
+    position: relative;
+    display: inline-block;
+    font-weight: 400;
+}
+.btn-primary:hover {
+    color: #eee;
+    border-color: #40a9ff;
+    background: #40a9ff;
+}
+.btn-default:hover {
+    border-color: #40a9ff;
+    color: #40a9ff;
+}
+.btn-primary:active {
+    color: #aaa;
+    border-color: #096dd9;
+    background: #096dd9;
+}
+.btn-default:hover {
+    color: #096dd9;
+    border-color: #096dd9;
+}
+.btn-default:active {
+    color: #096dd9;
+}
+footer {
+    user-select: none;
+    font-size: 14px;
+    padding: 24px 0;
+    position: absolute;
+    bottom: 2%;
+}
+.small {
+    font-size: 15px;
+}
+</style>
+</head><body>
+
+<p>
+You are being redirected to an external website: <a href="{{.URL}}">{{.URL}}</a>...
+</p>
+
+<div class="buttons">
+<button class="btn-primary" onclick="location.href='{{.URL}}'">
+Allow Once
+</button>
+<button class="btn-default" onclick="allowAlways()">
+Allow Always
+</button>
+</div>
+
+<p class="small">
+<sup>*</sup>Please note that <a href="{{.OwnerDomain}}">{{.OwnerName}}</a> cannot be held responsible for external websites content &amp; privacy policies.
+</p>
+
+<footer>
+{{ if .ShowImpressum }}
+<a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowPrivacy }}
+<a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;
+{{ end }}
+{{ if .ShowContact }}
+<a href="/s/.contact">Contact</a><br/><br/>
+{{ end }}
+&copy; 2021 Created by Changkun Ou.
+</footer>
+<script>
+
+/**
+ * allowAlways sets a cookie so that the server will know if user wants
+ * to always redirect or not.
+ */
+function allowAlways() {
+    var date = new Date();
+    date.setTime(date.getTime() + (365*24*60*60*1000)); // allow 365 days.
+    document.cookie = 'redir_allow=1; expires=' + date.toUTCString();
+    document.location = '{{.URL}}'
+}
+</script>
+</body></html>

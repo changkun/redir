@@ -41,15 +41,21 @@ type config struct {
 		GoDocHost  string `yaml:"godoc_host"`
 	} `yaml:"x"`
 	Auth struct {
-		Enable   bool   `yaml:"enable"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
+		Enable   bool `yaml:"enable"`
+		Accounts []struct {
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"accounts"`
 	} `yaml:"auth"`
 	Stats struct {
 		Enable bool `yaml:"enable"`
 	} `yaml:"stats"`
 	GDPR struct {
-		HideIP  bool `yaml:"hide_ip"`
+		HideIP bool `yaml:"hide_ip"`
+		Owner  struct {
+			Name   string `yaml:"name"`
+			Domain string `yaml:"domain"`
+		} `yaml:"owner"`
 		Contact struct {
 			Enable bool   `yaml:"enable"`
 			Email  string `yaml:"email"`

@@ -31,6 +31,8 @@ var (
 	xtmpl string
 	//go:embed templates/wait.html
 	waittmpl string
+	//go:embed templates/warn.html
+	warntmpl string
 	//go:embed templates/impressum.html
 	impressumtmpl string
 	//go:embed templates/privacy.html
@@ -46,6 +48,7 @@ var (
 var (
 	xTmpl         *template.Template
 	waitTmpl      *template.Template
+	warnTmpl      *template.Template
 	impressumTmpl *template.Template
 	privacyTmpl   *template.Template
 	contactTmpl   *template.Template
@@ -62,6 +65,7 @@ func init() {
 func newServer(ctx context.Context) *server {
 	xTmpl = template.Must(template.New("xTmpl").Parse(xtmpl))
 	waitTmpl = template.Must(template.New("waitTmpl").Parse(waittmpl))
+	warnTmpl = template.Must(template.New("warnTmpl").Parse(warntmpl))
 	impressumTmpl = template.Must(template.New("impressumTmpl").Parse(impressumtmpl))
 	privacyTmpl = template.Must(template.New("privacyTmpl").Parse(privacytmpl))
 	contactTmpl = template.Must(template.New("contactTmpl").Parse(contacttmpl))

@@ -81,7 +81,7 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 2, got %v", l.Len())
 	}
 
-	l.flush()
+	l.Flush()
 	if l.Len() != 0 {
 		t.Fatalf("wrong size, want 0, got %v", l.Len())
 	}

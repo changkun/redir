@@ -28,7 +28,10 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 		"kind":       r.Kind,
 		"url":        r.URL,
 		"private":    r.Private,
+		"trust":      r.Trust,
 		"valid_from": r.ValidFrom,
+		"created_by": r.CreatedBy,
+		"updated_by": r.UpdatedBy,
 	}}, opts)
 	if err != nil {
 		err = fmt.Errorf("failed to insert given redirect: %w", err)
@@ -59,7 +62,9 @@ func (db *Store) UpdateAlias(ctx context.Context, r *models.Redir) error {
 			"alias":      r.Alias,
 			"url":        r.URL,
 			"private":    r.Private,
+			"trust":      r.Trust,
 			"valid_from": r.ValidFrom,
+			"updated_by": r.UpdatedBy,
 		}},
 	).Decode(&ret)
 	if err != nil {

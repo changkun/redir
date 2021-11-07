@@ -11,8 +11,18 @@ license that can be found in the LICENSE file. -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <!-- {{.AdminView}} and {{.StatsMode}} are replaced by server, e.g. -->
-    <!-- <div id="root" is-admin="true" stats-mode="true" dev-mode="true"></div> -->
-    <div id="root" is-admin="{{.AdminView}}" stats-mode="{{.StatsMode}}" dev-mode="{{.DevMode}}"></div>
+    <!--
+    Replaced by server, for example:
+
+    <div id="root" is-admin="true" stats-mode="true" dev-mode="true"></div>
+    -->
+    <div id="root"
+      is-admin="{{.AdminView}}"
+      stats-mode="{{.StatsMode}}"
+      dev-mode="{{.DevMode}}"
+      show-impressum="{{.ShowImpressum}}"
+      show-privacy="{{.ShowPrivacy}}"
+      show-contact="{{.ShowContact}}"
+    ></div>
   </body>
 </html>

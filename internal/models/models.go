@@ -20,12 +20,15 @@ const (
 // Redir is the core redir model, it records a kind of alias
 // and its correlated link.
 type Redir struct {
-	ID        string    `json:"-"          bson:"_id"`
-	Alias     string    `json:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       bson:"kind"`
-	URL       string    `json:"url"        bson:"url"`
-	Private   bool      `json:"private"    bson:"private"`
-	ValidFrom time.Time `json:"valid_from" bson:"valid_from"`
+	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
+	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
+	Kind      AliasKind `json:"kind"       yaml:"-"          bson:"kind"`
+	URL       string    `json:"url"        yaml:"url"        bson:"url"`
+	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
+	Trust     bool      `json:"trust"      yaml:"trust"      bson:"trust"`
+	ValidFrom time.Time `json:"valid_from" yaml:"valid_from" bson:"valid_from"`
+	CreatedBy string    `json:"created_by" yaml:"created_by" bson:"created_by"`
+	UpdatedBy string    `json:"updated_by" yaml:"updated_by" bson:"updated_by"`
 }
 
 // RedirIndex is an extension to Redir, which offers more statistic
@@ -33,10 +36,13 @@ type Redir struct {
 type RedirIndex struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       yaml:"-"       bson:"kind"`
+	Kind      AliasKind `json:"kind"       yaml:"-"          bson:"kind"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
+	Trust     bool      `json:"trust"      yaml:"trust"      bson:"trust"`
 	ValidFrom time.Time `json:"valid_from" yaml:"valid_from" bson:"valid_from"`
+	CreatedBy string    `json:"created_by" yaml:"created_by" bson:"created_by"`
+	UpdatedBy string    `json:"updated_by" yaml:"updated_by" bson:"updated_by"`
 	UV        int64     `json:"uv"         yaml:"uv"         bson:"uv"`
 	PV        int64     `json:"pv"         yaml:"pv"         bson:"pv"`
 }

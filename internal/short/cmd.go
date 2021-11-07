@@ -15,6 +15,7 @@ import (
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -52,7 +53,7 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 			err = ErrInvalidAlias
 			return
 		}
-
+		r.CreatedBy = r.UpdatedBy
 		err = s.StoreAlias(ctx, r)
 		if err != nil {
 			return
@@ -117,7 +118,8 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 		if err != nil {
 			return
 		}
-		log.Println(r.URL)
+		b, _ := yaml.Marshal(r)
+		log.Printf("\n%v\n", string(b))
 	}
 	return
 }

@@ -41,7 +41,7 @@ const rfc3339 = (datestr) => {
       pad(d.getDate()) + "T" +
       pad(d.getHours()) + ":" +
       pad(d.getMinutes()) + ":" +
-      pad(d.getSeconds()) + 
+      pad(d.getSeconds()) +
       timezoneOffset(d.getTimezoneOffset());
 }
 
@@ -52,7 +52,7 @@ const RedirTable = (props) => {
 
   let columns = [
     {
-      title: 'Short Link',
+      title: 'Alias',
       dataIndex: 'alias',
       render: text => {
         const path = window.location.pathname.endsWith('/') ?
@@ -64,6 +64,7 @@ const RedirTable = (props) => {
       },
       width: '15%',
       copyable: true,
+      tip: 'A meaningful string can help visitor recognize the content behind the link directly. Example: alias "an/example" represents /s/an/example router.',
     },
     {
       title: 'URL',
@@ -72,6 +73,7 @@ const RedirTable = (props) => {
       valueType: 'string',
       width: '30%',
       ellipsis: true,
+      tip: 'The actual URL to be redirect via the shortened alias.',
     },
   ]
   if (props.isAdmin) {
@@ -80,6 +82,7 @@ const RedirTable = (props) => {
       dataIndex: 'visits',
       hideInSearch: true,
       editable: false,
+      tip: 'Page visit (PV) count and user visit (UV) count.',
     })
     columns.push(...[
       {
@@ -91,12 +94,39 @@ const RedirTable = (props) => {
           true: { text: 'Private' },
           false: { text: 'Public' },
         },
+        tip: 'Public alias will be listed on the public index page (/s).',
+      },
+      {
+        title: 'Trustable',
+        key: 'trust',
+        dataIndex: 'trust',
+        valueType: 'select',
+        valueEnum: {
+          true: { text: 'Trusted' },
+          false: { text: 'Untrusted' },
+        },
+        tip: 'Trusted alias will skip the privacy warning page regarding external links to the visitor. Same origin URLs will always conduct the redirects and do not effected by this field.',
       },
       {
         title: 'Valid from',
         dataIndex: 'valid_from',
         valueType: 'dateTime',
         hideInSearch: true,
+        tip: 'The shortened link is avaliable since the time specified. Before the specified time, the link shows a countdown page.',
+      },
+      {
+        title: 'Created By',
+        dataIndex: 'created_by',
+        hideInSearch: true,
+        editable: false,
+        tip: 'The person who created this alias.',
+      },
+      {
+        title: 'Updated By',
+        dataIndex: 'updated_by',
+        hideInSearch: true,
+        editable: false,
+        tip: 'The person who updated this alias lately.',
       },
       {
         title: 'Operation',
@@ -111,7 +141,8 @@ const RedirTable = (props) => {
     ])
   }
 
-  let pageSize = 10
+  let pageSize = 18
+
   const expandedRowRender = (params) => {
     return <Stats alias={params.alias} devMode={props.devMode}/>
   }
@@ -149,6 +180,7 @@ const RedirTable = (props) => {
               redirs.data[i].url = window.location.host + `${path}/` + redirs.data[i].alias
             } else {
               redirs.data[i].private = redirs.data[i].private ? 'true' : 'false'
+              redirs.data[i].trust = redirs.data[i].trust ? 'true' : 'false'
               if (redirs.data[i].valid_from === '0001-01-01T00:00:00Z') {
                 redirs.data[i].valid_from = null
               }
@@ -177,6 +209,7 @@ const RedirTable = (props) => {
                 alias: row.alias,
                 url: row.url,
                 private: row.private === 'true' ? true : false,
+                trust: row.trust === 'true' ? true : false,
                 valid_from: row.valid_from === null ? null : (
                   (typeof row.valid_from) === 'string' ? rfc3339(row.valid_from) : row.valid_from.format()
                 )

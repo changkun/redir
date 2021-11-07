@@ -45,7 +45,13 @@ func TestUpdateAlias(t *testing.T) {
 	ctx := context.Background()
 	s := prepare(ctx, t)
 
-	err := s.UpdateAlias(ctx, &models.Redir{
+	r, err := s.FetchAlias(ctx, kalias)
+	if err != nil {
+		t.Fatalf("FetchAlias failed with err: %v", err)
+	}
+
+	err = s.UpdateAlias(ctx, &models.Redir{
+		ID:    r.ID,
 		Alias: kalias,
 		URL:   want,
 	})
@@ -53,7 +59,7 @@ func TestUpdateAlias(t *testing.T) {
 		t.Fatalf("UpdateAlias failed with err: %v", err)
 	}
 
-	r, err := s.FetchAlias(ctx, kalias)
+	r, err = s.FetchAlias(ctx, kalias)
 	if err != nil {
 		t.Fatalf("UpdateAlias failed with err: %v", err)
 	}

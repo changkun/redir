@@ -43,13 +43,13 @@ func NewLRU(doexpire bool) *LRU {
 // solution to prevent if the database is updated but lru is
 // not synced.
 func (l *LRU) clear() {
-	t := time.NewTicker(time.Minute * 5)
+	t := time.NewTicker(5 * time.Minute)
 	for range t.C {
-		l.flush()
+		l.Flush()
 	}
 }
 
-func (l *LRU) flush() {
+func (l *LRU) Flush() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

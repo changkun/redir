@@ -29,6 +29,7 @@ var (
 	alias    = flag.String("a", "", "Alias for a new link")
 	link     = flag.String("l", "", "Actual link for the alias, optional for delete/fetch")
 	private  = flag.Bool("p", false, "The link is private and will not be listed in the index page, avaliable for operator create/update")
+	trust    = flag.Bool("trust", false, "The link is either trusted to not show privacy warning page or untrusted to show privacy warning page for external redirects")
 	validt   = flag.String("vt", "", "the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update")
 )
 
@@ -43,7 +44,7 @@ GoVersion: %s
 
 Command line usage:
 
-$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -vt <time>]
+$ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -t -vt <time>]
 
 options:
 `, config.Conf.Store, version.Version, runtime.Version())
@@ -71,8 +72,11 @@ redir -op fetch -a changkun
 redir -op update -a changkun -l https://blog.changkun.de -p
 	The alias will not be listed in the index page
 
+redir -op update -a changkun -l https://blog.changkun.de -p -t
+	The alias will not be listed in the index page and will always do the redirect without showing privacy warning
+
 redir -op update -a changkun -l https://blog.changkun.de -vt 2022-01-01T00:00:00+08:00
-	The alias will be accessible starts from 2022-01-01T00:00:00+08:00.
+	The alias will be accessible starts from 2022-01-01T00:00:00+08:00
 
 redir -op delete -a changkun
 	Delete the alias from database
@@ -83,7 +87,7 @@ redir -op delete -a changkun
 func main() {
 	log.SetPrefix("redir: ")
 	log.SetFlags(log.Lmsgprefix | log.LstdFlags | log.Lshortfile)
-	flag.Usage = usage
+	flag.CommandLine.Usage = usage
 	flag.Parse()
 
 	if len(os.Args) < 2 {
@@ -140,7 +144,7 @@ func runCmd() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	done := make(chan bool, 1)
+	done := make(chan bool)
 	go func() {
 		defer func() { done <- true }()
 
@@ -155,16 +159,28 @@ func runCmd() {
 			*alias = utils.Randstr(config.Conf.R.Length)
 		}
 
-		t, err := time.Parse(time.RFC3339, *validt)
-		if err != nil {
-			return
+		var t time.Time
+		var err error
+		if *validt != "" {
+			t, err = time.Parse(time.RFC3339, *validt)
+			if err != nil {
+				log.Fatalf("invalid time format %s: %v", *validt, err)
+				return
+			}
 		}
 
+		// FIXME: This can be problematic for update.
+		//
+		// For example, if a link is set to private, but an update
+		// did's specify -p (private), then the *private will be false,
+		// then result the link to be public. This is apparently an
+		// undesired behavior.
 		err = short.Cmd(ctx, short.Op(*operate), &models.Redir{
 			Alias:     *alias,
 			Kind:      kind,
 			URL:       *link,
 			Private:   *private,
+			Trust:     *trust,
 			ValidFrom: t.UTC(),
 		})
 		if err != nil {
