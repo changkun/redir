@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@ant-design/charts": "^1.2.10",
+    "@ant-design/charts": "^1.2.14",
     "@ant-design/dark-theme": "^2.0.2",
-    "@ant-design/pro-form": "^1.37.0",
-    "@ant-design/pro-table": "^2.50.1",
+    "@ant-design/pro-form": "^1.46.0",
+    "@ant-design/pro-table": "^2.56.7",
     "antd": "^4.16.13",
     "moment": "^2.29.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "react-scripts": "4.0.3",
-    "ua-parser-js": "^0.7.28"
+    "react-scripts": "^4.0.3",
+    "ua-parser-js": "^1.0.2"
   },
   "scripts": {
     "start": "react-scripts start",
