@@ -1,0 +1,38 @@
+# Copyright 2021 Changkun Ou. All rights reserved.
+# Use of this source code is governed by a MIT
+# license that can be found in the LICENSE file.
+
+name: redir
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.16
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Build frontend
+      run: |
+        make dashboard
+
+    - name: Race Test
+      run: |
+        go test -v -race -count=1 ./...
+
+    - name: Test
+      run: |
+        go test -v -coverprofile=coverage.txt -covermode=atomic ./...

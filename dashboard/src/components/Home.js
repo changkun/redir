@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-import { useRef, Fragment } from 'react'
+import { useRef } from 'react'
 import { Layout, Row, Col } from 'antd'
 import RedirTable from './RedirTable'
 import RedirCreate from './RedirCreate'

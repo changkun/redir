@@ -18,7 +18,7 @@ const kalias = "alias"
 func prepare(ctx context.Context, t *testing.T) *db.Store {
 	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
 	if err != nil {
-		t.Fatalf("cannot connect to data store")
+		t.Skip("cannot connect to data store")
 	}
 
 	err = s.StoreAlias(ctx, &models.Redir{
@@ -80,7 +80,7 @@ func TestFetchAliasAll(t *testing.T) {
 	ctx := context.Background()
 	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
 	if err != nil {
-		t.Fatalf("cannot connect to data store")
+		t.Skip("cannot connect to data store")
 	}
 	rs, total, err := s.FetchAliasAll(ctx, true, models.KindShort, 20, 1)
 	if err != nil || len(rs) == 0 || total == 0 {
@@ -101,7 +101,7 @@ func BenchmarkFetchAliasAll(b *testing.B) {
 	ctx := context.Background()
 	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
 	if err != nil {
-		b.Fatalf("cannot connect to data store")
+		b.Skip("cannot connect to data store")
 	}
 
 	b.ReportAllocs()
