@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"changkun.de/x/redir/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,6 +24,7 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"alias": r.Alias, "kind": r.Kind}
 
+	now := time.Now().UTC()
 	ret, err := col.UpdateOne(ctx, filter, bson.M{"$setOnInsert": bson.M{
 		// do not use r directly, because it can clear object id.
 		"alias":      r.Alias,
@@ -33,13 +35,15 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 		"valid_from": r.ValidFrom,
 		"created_by": r.CreatedBy,
 		"updated_by": r.UpdatedBy,
+		"created_at": now,
+		"updated_at": now,
 	}}, opts)
 	if err != nil {
 		err = fmt.Errorf("failed to insert given redirect: %w", err)
 		return
 	}
 	if ret.MatchedCount > 0 {
-		err = errors.New("alias is existed")
+		err = errors.New("alias already existed")
 	}
 	return
 }
@@ -66,6 +70,7 @@ func (db *Store) UpdateAlias(ctx context.Context, r *models.Redir) error {
 			"trust":      r.Trust,
 			"valid_from": r.ValidFrom,
 			"updated_by": r.UpdatedBy,
+			"updated_at": time.Now(),
 		}},
 	).Decode(&ret)
 	if err != nil {
@@ -112,11 +117,10 @@ func (db *Store) FetchAliasAll(
 	// no PV/UV, no actual URLs.
 	if public {
 		filter := bson.M{"kind": kind, "private": false}
-		opts := []*options.FindOptions{
+		cur, err := col.Find(ctx, filter, []*options.FindOptions{
 			options.Find().SetLimit(pageSize),
 			options.Find().SetSkip((pageNum - 1) * pageSize),
-			options.Find().SetProjection(bson.M{"url": 0})}
-		cur, err := col.Find(ctx, filter, opts...)
+			options.Find().SetProjection(bson.M{"url": 0})}...)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -157,6 +161,7 @@ func (db *Store) FetchAliasAll(
 	// 			valid_from: {$first: '$valid_from'},
 	// 			created_by: {$first: '$created_by'},
 	// 			updated_by: {$first: '$updated_by'},
+	// 			updated_at: {$first: '$updated_at'},
 	// 			count: {$sum: 1},
 	// 		},
 	// 	},
@@ -170,9 +175,11 @@ func (db *Store) FetchAliasAll(
 	// 		valid_from: {$first: '$valid_from'},
 	// 		created_by: {$first: '$created_by'},
 	// 		updated_by: {$first: '$updated_by'},
+	// 		updated_at: {$first: '$updated_at'},
 	// 		uv: {$sum: 1},
 	// 		pv: {$sum: '$count'},
 	// 	}},
+	// 	{$sort : {updated_at: -1}},
 	// 	{$sort : {pv: -1}},
 	// 	{$sort : {uv: -1}},
 	// ])
@@ -212,6 +219,7 @@ func (db *Store) FetchAliasAll(
 				"valid_from": bson.M{"$first": "$valid_from"},
 				"created_by": bson.M{"$first": "$created_by"},
 				"updated_by": bson.M{"$first": "$updated_by"},
+				"updated_at": bson.M{"$first": "$updated_at"},
 				"count":      bson.M{"$sum": 1},
 			}},
 		},
@@ -226,15 +234,23 @@ func (db *Store) FetchAliasAll(
 				"valid_from": bson.M{"$first": "$valid_from"},
 				"created_by": bson.M{"$first": "$created_by"},
 				"updated_by": bson.M{"$first": "$updated_by"},
+				"updated_at": bson.M{"$first": "$updated_at"},
 				"uv":         bson.M{"$sum": 1},
 				"pv":         bson.M{"$sum": "$count"},
 			}},
 		},
+		// After the aggregation, the result is not stable.
+		// We still need sort the result a little bit to get more
+		// stable result. We can either sort by the PV/UV or the date.
 
 		// Sort by PV/UV.
 		// bson.D{
 		// 	primitive.E{Key: "$sort", Value: bson.M{"pv": -1, "uv": -1}},
 		// },
+		// Sort by updated date.
+		bson.D{
+			primitive.E{Key: "$sort", Value: bson.M{"updated_at": -1}},
+		},
 	}, &options.AggregateOptions{
 		// Sort by natural order.
 		Hint: bson.D{

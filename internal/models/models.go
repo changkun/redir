@@ -29,6 +29,8 @@ type Redir struct {
 	ValidFrom time.Time `json:"valid_from" yaml:"valid_from" bson:"valid_from"`
 	CreatedBy string    `json:"created_by" yaml:"created_by" bson:"created_by"`
 	UpdatedBy string    `json:"updated_by" yaml:"updated_by" bson:"updated_by"`
+	CreatedAt time.Time `json:"-"          yaml:"created_at" bson:"created_at"`
+	UpdatedAt time.Time `json:"-" yaml:"updated_at" bson:"updated_at"`
 }
 
 // RedirIndex is an extension to Redir, which offers more statistic
@@ -43,6 +45,8 @@ type RedirIndex struct {
 	ValidFrom time.Time `json:"valid_from" yaml:"valid_from" bson:"valid_from"`
 	CreatedBy string    `json:"created_by" yaml:"created_by" bson:"created_by"`
 	UpdatedBy string    `json:"updated_by" yaml:"updated_by" bson:"updated_by"`
+	CreatedAt time.Time `json:"-"          yaml:"created_at" bson:"created_at"`
+	UpdatedAt time.Time `json:"-"          yaml:"updated_at" bson:"updated_at"`
 	UV        int64     `json:"uv"         yaml:"uv"         bson:"uv"`
 	PV        int64     `json:"pv"         yaml:"pv"         bson:"pv"`
 }
