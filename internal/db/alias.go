@@ -12,6 +12,7 @@ import (
 	"changkun.de/x/redir/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -135,51 +136,119 @@ func (db *Store) FetchAliasAll(
 	// Non-public mode queries PV/UV as additional information,
 	// and paginates on this. Let's first find the aliases.
 	filter := bson.M{"kind": kind}
-	opts := []*options.FindOptions{
-		options.Find().SetLimit(pageSize),
-		options.Find().SetSkip((pageNum - 1) * pageSize),
-		options.Find().SetSort(bson.D{primitive.E{Key: "$natural", Value: -1}}),
+	n, err := col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
 	}
-	cur, err := col.Find(ctx, filter, opts...)
+
+	// db.links.aggregate([
+	// 	{$match: {kind: 0}},
+	// 	{$skip:  20},
+	// 	{$limit: 10},
+	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
+	// 	{'$unwind': {path: '$visit', preserveNullAndEmptyArrays: true}},
+	// 	{
+	// 		$group: {
+	// 			_id: {alias: '$alias', ip: '$visit.ip'},
+	// 			kind: {$first: '$kind'},
+	// 			url: {$first: '$url'},
+	// 			private: {$first: '$private'},
+	// 			trust: {$first: '$trust'},
+	// 			valid_from: {$first: '$valid_from'},
+	// 			created_by: {$first: '$created_by'},
+	// 			updated_by: {$first: '$updated_by'},
+	// 			count: {$sum: 1},
+	// 		},
+	// 	},
+	// 	{$group: {
+	// 		_id: '$_id.alias',
+	// 		alias: {$first: '$_id.alias'},
+	// 		kind: {$first: '$kind'},
+	// 		url: {$first: '$url'},
+	// 		private: {$first: '$private'},
+	// 		trust: {$first: '$trust'},
+	// 		valid_from: {$first: '$valid_from'},
+	// 		created_by: {$first: '$created_by'},
+	// 		updated_by: {$first: '$updated_by'},
+	// 		uv: {$sum: 1},
+	// 		pv: {$sum: '$count'},
+	// 	}},
+	// 	{$sort : {pv: -1}},
+	// 	{$sort : {uv: -1}},
+	// ])
+	cur, err := col.Aggregate(ctx, mongo.Pipeline{
+		bson.D{
+			primitive.E{Key: "$match", Value: bson.M{
+				"kind": kind,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$skip", Value: (pageNum - 1) * pageSize},
+		},
+		bson.D{
+			primitive.E{Key: "$limit", Value: pageSize},
+		},
+		bson.D{
+			primitive.E{Key: "$lookup", Value: bson.M{
+				"from":         colvisit,
+				"localField":   "alias",
+				"foreignField": "alias",
+				"as":           "visit",
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$unwind", Value: bson.M{
+				"path":                       "$visit",
+				"preserveNullAndEmptyArrays": true,
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id":        bson.M{"alias": "$alias", "ip": "$visit.ip"},
+				"kind":       bson.M{"$first": "$kind"},
+				"url":        bson.M{"$first": "$url"},
+				"private":    bson.M{"$first": "$private"},
+				"trust":      bson.M{"$first": "$trust"},
+				"valid_from": bson.M{"$first": "$valid_from"},
+				"created_by": bson.M{"$first": "$created_by"},
+				"updated_by": bson.M{"$first": "$updated_by"},
+				"count":      bson.M{"$sum": 1},
+			}},
+		},
+		bson.D{
+			primitive.E{Key: "$group", Value: bson.M{
+				"_id":        "$_id.alias",
+				"alias":      bson.M{"$first": "$_id.alias"},
+				"kind":       bson.M{"$first": "$kind"},
+				"url":        bson.M{"$first": "$url"},
+				"private":    bson.M{"$first": "$private"},
+				"trust":      bson.M{"$first": "$trust"},
+				"valid_from": bson.M{"$first": "$valid_from"},
+				"created_by": bson.M{"$first": "$created_by"},
+				"updated_by": bson.M{"$first": "$updated_by"},
+				"uv":         bson.M{"$sum": 1},
+				"pv":         bson.M{"$sum": "$count"},
+			}},
+		},
+
+		// Sort by PV/UV.
+		// bson.D{
+		// 	primitive.E{Key: "$sort", Value: bson.M{"pv": -1, "uv": -1}},
+		// },
+	}, &options.AggregateOptions{
+		// Sort by natural order.
+		Hint: bson.D{
+			primitive.E{Key: "$natural", Value: -1},
+		},
+	})
 	if err != nil {
 		return nil, 0, err
 	}
 	defer cur.Close(ctx)
 
-	n, err := col.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
-	}
 	var rs []models.RedirIndex
 	if err := cur.All(ctx, &rs); err != nil {
 		return nil, 0, err
-	}
-
-	// This is a little bit ugly. I know. But this seems to be the least effort
-	// so far. It simply finds the matched PV/UV for the above searched aliases.
-	var as []string
-	for _, r := range rs {
-		as = append(as, r.Alias)
-	}
-	vr, err := db.StatVisit(ctx, as)
-	if err != nil {
-		return nil, 0, err
-	}
-	temp := map[string]struct {
-		PV int64
-		UV int64
-	}{}
-	for _, v := range vr {
-		temp[v.Alias] = struct {
-			PV int64
-			UV int64
-		}{PV: v.PV, UV: v.UV}
-	}
-	for i := range rs {
-		if v, ok := temp[rs[i].Alias]; ok {
-			rs[i].PV = v.PV
-			rs[i].UV = v.UV
-		}
 	}
 
 	return rs, n, nil
