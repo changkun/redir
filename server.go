@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
@@ -131,6 +132,12 @@ func (s *server) xHandler() http.Handler {
 		}
 		importRoot = importPath + "/" + elem
 		repoRoot = config.Conf.X.RepoPath + "/" + elem
+
+		// Handling 'git clone https://changkun.de/x/repo'.
+		if suffix == "/info/refs" && strings.HasPrefix(req.URL.Query().Get("service"), "git-") && elem != "" {
+			http.Redirect(w, req, fmt.Sprintf("%s/info/refs?%s", repoRoot, req.URL.RawQuery), http.StatusFound)
+			return
+		}
 
 		d := &struct {
 			ImportRoot string
