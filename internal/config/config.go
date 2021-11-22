@@ -17,6 +17,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type authType string
+
+var (
+	None  authType = "none"
+	Basic authType = "basic"
+	SSO   authType = "sso"
+)
+
 type config struct {
 	Title       string `yaml:"title"`
 	Host        string `yaml:"host"`
@@ -41,11 +49,12 @@ type config struct {
 		GoDocHost  string `yaml:"godoc_host"`
 	} `yaml:"x"`
 	Auth struct {
-		Enable   bool `yaml:"enable"`
-		Accounts []struct {
+		Enable authType `yaml:"enable"`
+		SSO    string   `yaml:"sso"`
+		Basic  []struct {
 			Username string `yaml:"username"`
 			Password string `yaml:"password"`
-		} `yaml:"accounts"`
+		} `yaml:"basic"`
 	} `yaml:"auth"`
 	Stats struct {
 		Enable bool `yaml:"enable"`

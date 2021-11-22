@@ -21,8 +21,9 @@ x:
   repo_path: https://github.com/changkun
   godoc_host: https://pkg.go.dev/
 auth:
-  enable: true
-  accounts:
+  enable: basic # or sso, none
+  sso: https://login.changkun.de
+  basic:
     - username: changkun
       password: redir
 stats:
