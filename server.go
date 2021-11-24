@@ -12,8 +12,11 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
 
 	"changkun.de/x/redir/internal/cache"
 	"changkun.de/x/redir/internal/config"
@@ -95,21 +98,29 @@ func (s *server) close() {
 
 func (s *server) registerHandler() {
 	l := utils.Logging()
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName(os.Getenv("NEWRELIC_NAME")),
+		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE")),
+		newrelic.ConfigDistributedTracerEnabled(true),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// semantic shortener (default)
 	log.Println("router /s is enabled.")
-	http.Handle(config.Conf.S.Prefix, l(s.shortHandler(models.KindShort)))
+	http.Handle(newrelic.WrapHandle(app, config.Conf.S.Prefix, l(s.shortHandler(models.KindShort))))
 
 	// random shortener
 	if config.Conf.R.Enable {
 		log.Println("router /r is enabled.")
-		http.Handle(config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+		http.Handle(newrelic.WrapHandle(app, config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom))))
 	}
 
 	// repo redirector
 	if config.Conf.X.Enable {
 		log.Println("router /x is enabled.")
-		http.Handle(config.Conf.X.Prefix, l(s.xHandler()))
+		http.Handle(newrelic.WrapHandle(app, config.Conf.X.Prefix, l(s.xHandler())))
 	}
 }
 
@@ -117,8 +128,8 @@ func (s *server) registerHandler() {
 // the tree rooted at importPath to pkg.go.dev pages for those import paths.
 // The redirections include headers directing `go get.` to satisfy the
 // imports by checking out code from repoPath using the configured VCS.
-func (s *server) xHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+func (s *server) xHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		importPath := strings.TrimSuffix(req.Host+config.Conf.X.Prefix, "/")
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
@@ -156,5 +167,5 @@ func (s *server) xHandler() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-	})
+	}
 }
