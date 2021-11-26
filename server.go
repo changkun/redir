@@ -28,6 +28,9 @@ import (
 type server struct {
 	db    *db.Store
 	cache *cache.LRU
+
+	app     *newrelic.Application
+	monitor func(*newrelic.Application, string, http.Handler) (string, http.Handler)
 }
 
 var (
@@ -96,31 +99,52 @@ func (s *server) close() {
 	log.Println(s.db.Close())
 }
 
-func (s *server) registerHandler() {
-	l := utils.Logging()
-	app, err := newrelic.NewApplication(
+func (s *server) registerNewRelic() {
+	name := os.Getenv("NEWRELIC_NAME")
+	lice := os.Getenv("NEWRELIC_LICENSE")
+
+	s.monitor = newrelic.WrapHandle
+	if name == "" || lice == "" {
+		// Don't use NewRelic if name or license is missing.
+		s.monitor = func(app *newrelic.Application, pattern string, handler http.Handler) (string, http.Handler) {
+			return pattern, handler
+		}
+		log.Println("NewRelic is deactivated.")
+		return
+	}
+
+	var err error
+	s.app, err = newrelic.NewApplication(
 		newrelic.ConfigAppName(os.Getenv("NEWRELIC_NAME")),
 		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE")),
 		newrelic.ConfigDistributedTracerEnabled(true),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to created NewRelic application: %v", err)
 	}
+
+	log.Println("NewRelic is activated.")
+}
+
+func (s *server) registerHandler() {
+	s.registerNewRelic()
+
+	l := utils.Logging()
 
 	// semantic shortener (default)
 	log.Println("router /s is enabled.")
-	http.Handle(newrelic.WrapHandle(app, config.Conf.S.Prefix, l(s.shortHandler(models.KindShort))))
+	http.Handle(s.monitor(s.app, config.Conf.S.Prefix, l(s.shortHandler(models.KindShort))))
 
 	// random shortener
 	if config.Conf.R.Enable {
 		log.Println("router /r is enabled.")
-		http.Handle(newrelic.WrapHandle(app, config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom))))
+		http.Handle(s.monitor(s.app, config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom))))
 	}
 
 	// repo redirector
 	if config.Conf.X.Enable {
 		log.Println("router /x is enabled.")
-		http.Handle(newrelic.WrapHandle(app, config.Conf.X.Prefix, l(s.xHandler())))
+		http.Handle(s.monitor(s.app, config.Conf.X.Prefix, l(s.xHandler())))
 	}
 }
 
