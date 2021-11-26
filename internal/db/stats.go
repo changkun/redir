@@ -20,7 +20,6 @@ import (
 func (db *Store) StatReferer(
 	ctx context.Context,
 	a string,
-	k models.AliasKind,
 	start, end time.Time,
 ) ([]models.RefStat, error) {
 
@@ -28,9 +27,7 @@ func (db *Store) StatReferer(
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
 		bson.D{
-			primitive.E{Key: "$match", Value: bson.M{
-				"kind": k, "alias": a,
-			}},
+			primitive.E{Key: "$match", Value: bson.M{"alias": a}},
 		},
 		bson.D{
 			primitive.E{Key: "$lookup", Value: bson.M{
@@ -98,7 +95,6 @@ func (db *Store) StatReferer(
 func (db *Store) StatUA(
 	ctx context.Context,
 	a string,
-	k models.AliasKind,
 	start, end time.Time,
 ) ([]models.UAStat, error) {
 
@@ -106,9 +102,7 @@ func (db *Store) StatUA(
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
 		bson.D{
-			primitive.E{Key: "$match", Value: bson.M{
-				"kind": k, "alias": a,
-			}},
+			primitive.E{Key: "$match", Value: bson.M{"alias": a}},
 		},
 		bson.D{
 			primitive.E{Key: "$lookup", Value: bson.M{
@@ -180,13 +174,12 @@ func (db *Store) StatUA(
 func (db *Store) StatVisitHist(
 	ctx context.Context,
 	a string,
-	k models.AliasKind,
 	start, end time.Time,
 ) ([]models.TimeHist, error) {
 
 	// Raw query
 	// db.links.aggregate([
-	// 	{$match: {kind: 0, alias: 'changkun'}},
+	// 	{$match: {alias: 'changkun'}},
 	// 	{'$lookup': {
 	// 		from: 'visit', localField: 'alias',
 	// 		foreignField: 'alias', as: 'visit'},
@@ -241,9 +234,7 @@ func (db *Store) StatVisitHist(
 	opts := options.Aggregate().SetMaxTime(10 * time.Second)
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
 		bson.D{primitive.E{
-			Key: "$match", Value: bson.M{
-				"kind": k, "alias": a,
-			},
+			Key: "$match", Value: bson.M{"alias": a},
 		}},
 		bson.D{primitive.E{
 			Key: "$lookup", Value: bson.M{

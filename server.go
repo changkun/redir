@@ -21,7 +21,6 @@ import (
 	"changkun.de/x/redir/internal/cache"
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
-	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/utils"
 )
 
@@ -133,13 +132,7 @@ func (s *server) registerHandler() {
 
 	// semantic shortener (default)
 	log.Println("router /s is enabled.")
-	http.Handle(s.monitor(s.app, config.Conf.S.Prefix, l(s.shortHandler(models.KindShort))))
-
-	// random shortener
-	if config.Conf.R.Enable {
-		log.Println("router /r is enabled.")
-		http.Handle(s.monitor(s.app, config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom))))
-	}
+	http.Handle(s.monitor(s.app, config.Conf.S.Prefix, l(s.sHandler())))
 
 	// repo redirector
 	if config.Conf.X.Enable {

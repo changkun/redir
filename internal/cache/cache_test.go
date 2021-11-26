@@ -26,7 +26,6 @@ func TestLRU(t *testing.T) {
 
 	r := &models.Redir{
 		Alias:     "a",
-		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -42,7 +41,6 @@ func TestLRU(t *testing.T) {
 
 	l.Put("b", &models.Redir{
 		Alias:     "b",
-		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -60,7 +58,6 @@ func TestLRU(t *testing.T) {
 
 	r = &models.Redir{
 		Alias:     "c",
-		Kind:      models.KindShort,
 		URL:       "3",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -89,28 +86,24 @@ func TestLRU(t *testing.T) {
 	tt := time.Now().UTC()
 	l.Put("a", &models.Redir{
 		Alias:     "a",
-		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: tt,
 	})
 	l.Put("b", &models.Redir{
 		Alias:     "b",
-		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: tt,
 	})
 	l.Put("c", &models.Redir{
 		Alias:     "c",
-		Kind:      models.KindShort,
 		URL:       "3",
 		Private:   false,
 		ValidFrom: tt,
 	})
 	rr := &models.Redir{
 		Alias:     "a",
-		Kind:      models.KindShort,
 		URL:       "2",
 		Private:   false,
 		ValidFrom: time.Now().UTC(),
@@ -142,7 +135,6 @@ func BenchmarkLRU(b *testing.B) {
 
 	r := &models.Redir{
 		Alias:     "a",
-		Kind:      models.KindShort,
 		URL:       "1",
 		Private:   false,
 		ValidFrom: time.Now(),
@@ -161,7 +153,6 @@ func BenchmarkLRU(b *testing.B) {
 			k := rands()
 			v := &models.Redir{
 				Alias:     k,
-				Kind:      models.KindShort,
 				URL:       rands(),
 				Private:   false,
 				ValidFrom: time.Now(),
@@ -180,7 +171,6 @@ func BenchmarkLRU(b *testing.B) {
 				k := rands()
 				v := &models.Redir{
 					Alias:     k,
-					Kind:      models.KindShort,
 					URL:       rands(),
 					Private:   false,
 					ValidFrom: time.Now(),

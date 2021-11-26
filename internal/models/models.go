@@ -8,21 +8,11 @@ import (
 	"time"
 )
 
-// AliasKind represents a kind of alias
-type AliasKind int
-
-// All kinds of aliases
-const (
-	KindShort AliasKind = iota
-	KindRandom
-)
-
 // Redir is the core redir model, it records a kind of alias
 // and its correlated link.
 type Redir struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       yaml:"-"          bson:"kind"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
 	Trust     bool      `json:"trust"      yaml:"trust"      bson:"trust"`
@@ -38,7 +28,6 @@ type Redir struct {
 type RedirIndex struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       yaml:"-"          bson:"kind"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
 	Trust     bool      `json:"trust"      yaml:"trust"      bson:"trust"`
@@ -55,7 +44,6 @@ type RedirIndex struct {
 type Visit struct {
 	VisitorID string    `json:"visitor_id" bson:"visitor_id"`
 	Alias     string    `json:"alias"      bson:"alias"`
-	Kind      AliasKind `json:"kind"       bson:"kind"`
 	IP        string    `json:"ip"         bson:"ip"`
 	UA        string    `json:"ua"         bson:"ua"`
 	Referer   string    `json:"referer"    bson:"referer"`

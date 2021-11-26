@@ -22,13 +22,12 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	opts := options.Update().SetUpsert(true)
-	filter := bson.M{"alias": r.Alias, "kind": r.Kind}
+	filter := bson.M{"alias": r.Alias}
 
 	now := time.Now().UTC()
 	ret, err := col.UpdateOne(ctx, filter, bson.M{"$setOnInsert": bson.M{
 		// do not use r directly, because it can clear object id.
 		"alias":      r.Alias,
-		"kind":       r.Kind,
 		"url":        r.URL,
 		"private":    r.Private,
 		"trust":      r.Trust,
@@ -108,7 +107,6 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redir, error
 func (db *Store) FetchAliasAll(
 	ctx context.Context,
 	public bool,
-	kind models.AliasKind,
 	pageSize, pageNum int64,
 ) ([]models.RedirIndex, int64, error) {
 	col := db.cli.Database(dbname).Collection(collink)
@@ -116,7 +114,7 @@ func (db *Store) FetchAliasAll(
 	// public UI does not offer any statistic informations:
 	// no PV/UV, no actual URLs.
 	if public {
-		filter := bson.M{"kind": kind, "private": false}
+		filter := bson.M{"private": false}
 		cur, err := col.Find(ctx, filter, []*options.FindOptions{
 			options.Find().SetLimit(pageSize),
 			options.Find().SetSkip((pageNum - 1) * pageSize),
@@ -139,14 +137,12 @@ func (db *Store) FetchAliasAll(
 
 	// Non-public mode queries PV/UV as additional information,
 	// and paginates on this. Let's first find the aliases.
-	filter := bson.M{"kind": kind}
-	n, err := col.CountDocuments(ctx, filter)
+	n, err := col.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// db.links.aggregate([
-	// 	{$match: {kind: 0}},
 	// 	{$skip:  20},
 	// 	{$limit: 10},
 	// 	{'$lookup': {from: 'visit', localField: 'alias', foreignField: 'alias', as: 'visit'}},
@@ -154,7 +150,6 @@ func (db *Store) FetchAliasAll(
 	// 	{
 	// 		$group: {
 	// 			_id: {alias: '$alias', ip: '$visit.ip'},
-	// 			kind: {$first: '$kind'},
 	// 			url: {$first: '$url'},
 	// 			private: {$first: '$private'},
 	// 			trust: {$first: '$trust'},
@@ -168,7 +163,6 @@ func (db *Store) FetchAliasAll(
 	// 	{$group: {
 	// 		_id: '$_id.alias',
 	// 		alias: {$first: '$_id.alias'},
-	// 		kind: {$first: '$kind'},
 	// 		url: {$first: '$url'},
 	// 		private: {$first: '$private'},
 	// 		trust: {$first: '$trust'},
@@ -184,11 +178,6 @@ func (db *Store) FetchAliasAll(
 	// 	{$sort : {uv: -1}},
 	// ])
 	cur, err := col.Aggregate(ctx, mongo.Pipeline{
-		bson.D{
-			primitive.E{Key: "$match", Value: bson.M{
-				"kind": kind,
-			}},
-		},
 		bson.D{
 			primitive.E{Key: "$skip", Value: (pageNum - 1) * pageSize},
 		},
@@ -212,7 +201,6 @@ func (db *Store) FetchAliasAll(
 		bson.D{
 			primitive.E{Key: "$group", Value: bson.M{
 				"_id":        bson.M{"alias": "$alias", "ip": "$visit.ip"},
-				"kind":       bson.M{"$first": "$kind"},
 				"url":        bson.M{"$first": "$url"},
 				"private":    bson.M{"$first": "$private"},
 				"trust":      bson.M{"$first": "$trust"},
@@ -227,7 +215,6 @@ func (db *Store) FetchAliasAll(
 			primitive.E{Key: "$group", Value: bson.M{
 				"_id":        "$_id.alias",
 				"alias":      bson.M{"$first": "$_id.alias"},
-				"kind":       bson.M{"$first": "$kind"},
 				"url":        bson.M{"$first": "$url"},
 				"private":    bson.M{"$first": "$private"},
 				"trust":      bson.M{"$first": "$trust"},

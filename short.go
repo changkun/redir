@@ -25,9 +25,9 @@ import (
 	"changkun.de/x/redir/internal/utils"
 )
 
-// shortHandler redirects the current request to a known link if the alias is
+// sHandler redirects the current request to a known link if the alias is
 // found in the redir store.
-func (s *server) shortHandler(kind models.AliasKind) http.Handler {
+func (s *server) sHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// for development.
@@ -42,11 +42,11 @@ func (s *server) shortHandler(kind models.AliasKind) http.Handler {
 		case http.MethodOptions:
 			// nothing, really.
 		case http.MethodPost:
-			s.shortHandlerPost(kind, w, r)
+			s.sHandlerPost(w, r)
 		case http.MethodGet:
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Cache-Control", "max-age=0")
-			s.shortHandlerGet(kind, w, r)
+			s.sHandlerGet(w, r)
 		default:
 			err := fmt.Errorf("%s is not supported", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
@@ -65,10 +65,10 @@ type shortOutput struct {
 	Message string `json:"message"`
 }
 
-// shortHandlerPost handles all kinds of operations.
+// sHandlerPost handles all kinds of operations.
 // This is not a RESTful style, because we don't have that much router space
 // to use. We are currently limited the single index router, which is the /s.
-func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, r *http.Request) {
+func (s *server) sHandlerPost(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -122,9 +122,9 @@ func (s *server) shortHandlerPost(kind models.AliasKind, w http.ResponseWriter, 
 	}
 }
 
-// shortHandlerGet is the core of redir service. It redirects a given
+// sHandlerGet is the core of redir service. It redirects a given
 // alias to the actual destination.
-func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r *http.Request) {
+func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {
 		if err != nil && !errors.Is(err, errUnauthorized) {
@@ -138,13 +138,7 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	ctx := r.Context()
 
 	// statistic page
-	var prefix string
-	switch kind {
-	case models.KindShort:
-		prefix = config.Conf.S.Prefix
-	case models.KindRandom:
-		prefix = config.Conf.R.Prefix
-	}
+	prefix := config.Conf.S.Prefix
 
 	// URLs with /s/.* is reserved for internal usage.
 	if strings.HasPrefix(r.URL.Path, prefix+".") {
@@ -157,7 +151,7 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 
 	// If alias is empty, then process index page request.
 	if alias == "" {
-		err = s.sIndex(ctx, w, r, kind)
+		err = s.sIndex(ctx, w, r)
 		return
 	}
 
@@ -171,7 +165,7 @@ func (s *server) shortHandlerGet(kind models.AliasKind, w http.ResponseWriter, r
 	if config.Conf.Stats.Enable {
 		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		s.recognizeVisitor(recordCtx, w, r, alias, kind)
+		s.recognizeVisitor(recordCtx, w, r, alias)
 	}
 
 	// Figure out redirect location
@@ -331,7 +325,6 @@ func (s *server) recognizeVisitor(
 	w http.ResponseWriter,
 	r *http.Request,
 	alias string,
-	kind models.AliasKind,
 ) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -348,7 +341,6 @@ func (s *server) recognizeVisitor(
 	vid, err := s.db.RecordVisit(ctx, &models.Visit{
 		VisitorID: cookieVid,
 		Alias:     alias,
-		Kind:      kind,
 		IP:        utils.ReadIP(r),
 		UA:        r.UserAgent(),
 		Referer:   r.Referer(),
@@ -396,7 +388,6 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, err
 	// store such a try path
 	r := &models.Redir{
 		Alias:     alias,
-		Kind:      models.KindShort,
 		URL:       tryPath,
 		Private:   false,
 		Trust:     false,
@@ -430,7 +421,6 @@ func (s *server) sIndex(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
-	kind models.AliasKind,
 ) error {
 	e := struct {
 		AdminView     bool
@@ -452,16 +442,16 @@ func (s *server) sIndex(
 	switch mode {
 	case "stats": // stats data is public to everyone
 		if config.Conf.Stats.Enable {
-			err := s.statData(ctx, w, r, kind)
+			err := s.statData(ctx, w, r)
 			if !errors.Is(err, errInvalidStatParam) {
 				return err
 			}
 			log.Println(err)
 		}
 	case "index": // public visible index data
-		return s.indexData(ctx, w, r, kind, true)
+		return s.indexData(ctx, w, r, true)
 	case "index-pro": // data with statistics
-		return s.indexData(ctx, w, r, kind, false)
+		return s.indexData(ctx, w, r, false)
 	case "admin":
 		_, err := s.handleAuth(w, r)
 		if err != nil {
@@ -472,7 +462,7 @@ func (s *server) sIndex(
 		// Process visitor information for public index, wait maximum 5 seconds.
 		recordCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		s.recognizeVisitor(recordCtx, w, r, "", kind)
+		s.recognizeVisitor(recordCtx, w, r, "")
 	}
 
 	// Serve the index page.
@@ -491,7 +481,6 @@ func (s *server) indexData(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
-	k models.AliasKind,
 	public bool,
 ) error {
 	if !public {
@@ -514,7 +503,7 @@ func (s *server) indexData(
 		pageNum = 1
 	}
 
-	rs, total, err := s.db.FetchAliasAll(ctx, public, k, int64(pageSize), int64(pageNum))
+	rs, total, err := s.db.FetchAliasAll(ctx, public, int64(pageSize), int64(pageNum))
 	if err != nil {
 		return err
 	}
@@ -536,7 +525,6 @@ func (s *server) statData(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
-	k models.AliasKind,
 ) (retErr error) {
 	defer func() {
 		if retErr != nil {
@@ -568,19 +556,19 @@ func (s *server) statData(
 	var results interface{}
 	switch stat {
 	case "referer":
-		results, err = s.db.StatReferer(ctx, a, k, start, end)
+		results, err = s.db.StatReferer(ctx, a, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
 	case "ua":
-		results, err = s.db.StatUA(ctx, a, k, start, end)
+		results, err = s.db.StatUA(ctx, a, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
 	case "time":
-		results, err = s.db.StatVisitHist(ctx, a, k, start, end)
+		results, err = s.db.StatVisitHist(ctx, a, start, end)
 		if err != nil {
 			retErr = err
 			return

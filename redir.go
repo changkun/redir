@@ -17,7 +17,6 @@ import (
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/short"
-	"changkun.de/x/redir/internal/utils"
 	"changkun.de/x/redir/internal/version"
 )
 
@@ -130,7 +129,7 @@ func runCmd() {
 
 	switch o := short.Op(*operate); o {
 	case short.OpCreate:
-		if *link == "" {
+		if *alias == "" || *link == "" {
 			flag.Usage()
 			return
 		}
@@ -147,18 +146,6 @@ func runCmd() {
 	done := make(chan bool)
 	go func() {
 		defer func() { done <- true }()
-
-		kind := models.KindShort
-		if *alias == "" {
-			kind = models.KindRandom
-			// This might conflict with existing ones, it should be fine
-			// at the moment, the user of redir can always the command twice.
-			if config.Conf.R.Length <= 0 {
-				config.Conf.R.Length = 6
-			}
-			*alias = utils.Randstr(config.Conf.R.Length)
-		}
-
 		var t time.Time
 		var err error
 		if *validt != "" {
@@ -177,7 +164,6 @@ func runCmd() {
 		// undesired behavior.
 		err = short.Cmd(ctx, short.Op(*operate), &models.Redir{
 			Alias:     *alias,
-			Kind:      kind,
 			URL:       *link,
 			Private:   *private,
 			Trust:     *trust,

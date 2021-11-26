@@ -13,13 +13,11 @@ import (
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
-	"changkun.de/x/redir/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
 type iofmt struct {
-	Short  []models.RedirIndex `yaml:"short"`
-	Random []models.RedirIndex `yaml:"random"`
+	Short []models.RedirIndex `yaml:"short"`
 }
 
 // ImportFile parses and imports the given file into redir database.
@@ -41,7 +39,6 @@ func ImportFile(fname string) {
 		r := &models.Redir{
 			Alias:     info.Alias,
 			URL:       info.URL,
-			Kind:      models.KindShort,
 			Private:   info.Private,
 			ValidFrom: info.ValidFrom,
 		}
@@ -51,33 +48,6 @@ func ImportFile(fname string) {
 			err = Cmd(ctx, OpCreate, r)
 			if err != nil {
 				log.Printf("cannot import alias %v: %v\n", info.Alias, err)
-			}
-		}
-	}
-	for _, info := range d.Random {
-		// This might conflict with existing ones, it should be fine
-		// at the moment, the user of redir can always the command twice.
-		if config.Conf.R.Length <= 0 {
-			config.Conf.R.Length = 6
-		}
-		alias := utils.Randstr(config.Conf.R.Length)
-
-		r := &models.Redir{
-			Alias:     alias,
-			URL:       info.URL,
-			Kind:      models.KindRandom,
-			Private:   info.Private,
-			ValidFrom: info.ValidFrom,
-		}
-		err = Cmd(ctx, OpUpdate, r)
-		if err != nil {
-			for i := 0; i < 10; i++ { // try 10x maximum
-				err = Cmd(ctx, OpCreate, r)
-				if err != nil {
-					log.Printf("cannot create alias %v: %v\n", alias, err)
-					continue
-				}
-				break
 			}
 		}
 	}
@@ -100,7 +70,7 @@ func DumpFile(fname string) {
 	pageNum := int64(1)
 	pageSize := int64(100)
 	for {
-		idx, _, err := s.FetchAliasAll(ctx, false, models.KindShort, pageSize, pageNum)
+		idx, _, err := s.FetchAliasAll(ctx, false, pageSize, pageNum)
 		if err != nil {
 			log.Printf("cannot fetch aliases, page num: %d, page siz: %d", pageNum, pageSize)
 			return
@@ -109,21 +79,6 @@ func DumpFile(fname string) {
 			break
 		}
 		idxes.Short = append(idxes.Short, idx...)
-		pageNum++
-	}
-
-	pageNum = 1
-	pageSize = 100
-	for {
-		idx, _, err := s.FetchAliasAll(ctx, false, models.KindRandom, pageSize, pageNum)
-		if err != nil {
-			log.Printf("cannot fetch aliases, page num: %d, page siz: %d", pageNum, pageSize)
-			return
-		}
-		if len(idx) == 0 {
-			break
-		}
-		idxes.Random = append(idxes.Random, idx...)
 		pageNum++
 	}
 

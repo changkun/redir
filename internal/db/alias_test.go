@@ -23,7 +23,6 @@ func prepare(ctx context.Context, t *testing.T) *db.Store {
 
 	err = s.StoreAlias(ctx, &models.Redir{
 		Alias:   kalias,
-		Kind:    models.KindShort,
 		URL:     "link",
 		Private: false,
 		Trust:   false,
@@ -82,7 +81,7 @@ func TestFetchAliasAll(t *testing.T) {
 	if err != nil {
 		t.Skip("cannot connect to data store")
 	}
-	rs, total, err := s.FetchAliasAll(ctx, true, models.KindShort, 20, 1)
+	rs, total, err := s.FetchAliasAll(ctx, true, 20, 1)
 	if err != nil || len(rs) == 0 || total == 0 {
 		t.Fatalf("fetch failed: %v, %v, %v", err, rs, total)
 	}
@@ -107,7 +106,7 @@ func BenchmarkFetchAliasAll(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rs, total, err := s.FetchAliasAll(ctx, false, models.KindShort, 100, 1)
+		rs, total, err := s.FetchAliasAll(ctx, false, 100, 1)
 		if err != nil || len(rs) == 0 || total == 0 {
 			b.Fatalf("fetch failed: %v, %v, %v", err, rs, total)
 		}

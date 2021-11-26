@@ -10,10 +10,6 @@ store: mongodb://localhost:27018
 cors: false
 s:
   prefix: /s/
-r:
-  enable: true
-  prefix: /r/
-  length: 6
 x:
   enable: true
   prefix: /x/

@@ -10,10 +10,6 @@ store: mongodb://redirdb:27017
 cors: false
 s:
   prefix: /s/
-r:
-  enable: true
-  prefix: /r/
-  length: 6
 x:
   enable: true
   prefix: /x/

@@ -60,13 +60,7 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 		}
 		log.Printf("alias %v has been created:\n", r.Alias)
 
-		var prefix string
-		switch r.Kind {
-		case models.KindShort:
-			prefix = config.Conf.S.Prefix
-		case models.KindRandom:
-			prefix = config.Conf.R.Prefix
-		}
+		prefix := config.Conf.S.Prefix
 		log.Printf("%s%s%s\n", config.Conf.Host, prefix, r.Alias)
 	case OpUpdate:
 		var rr *models.Redir
@@ -88,9 +82,6 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 			tt := time.Time{}
 			if r.ValidFrom == tt {
 				r.ValidFrom = rr.ValidFrom
-			}
-			if rr.Kind != r.Kind {
-				r.Kind = rr.Kind
 			}
 			r.ID = rr.ID
 		}

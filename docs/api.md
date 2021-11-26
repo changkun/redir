@@ -1,6 +1,6 @@
 # Redir APIs
 
-All possible routers: `/s`, `/r`, and `/x`. The `/s` is the most
+All possible routers: `/s`, and `/x`. The `/s` is the most
 complicated router because we are limited to use these prefixes
 (for many reasons, e.g. deploy to an existing domain that served a lot
 different routers. The prefix is configurable).
@@ -9,7 +9,7 @@ Thus, all kinds of data, pages, static files are served under this router.
 
 ## GET /s
 
-The GET request query parameters of `/s` and `/r` are listed as follows:
+The GET request query parameters of `/s` are listed as follows:
 
 - `mode`, possible options: `stats`, `index`, `index-pro`
   + `admin`, access admin dashboard
@@ -27,7 +27,7 @@ The GET request query parameters of `/s` and `/r` are listed as follows:
 
 ## POST /s
 
-The POST request body of `/s` and `/r` is in the following format:
+The POST request body of `/s` is in the following format:
 
 ```json
 {

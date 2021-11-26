@@ -5,7 +5,7 @@ Full-featured, self-hosted URL shortener written in Go.
 | Features | Description |
 |:-------:|:------------|
 |**Custom Domain**| Everything is under control with your own domain |
-|**Link Shortener**| Support `/s/semantic-name` for short semantic alias and `/r/random-str` for anonymous shortening |
+|**Link Shortener**| Support `/s/semantic-name` for short semantic alias for anonymous shortening |
 |**Go [Vanity Import](https://golang.org/cmd/go/#hdr-Remote_import_paths)**|Redirect `/x/repo-name` to configured VCS and `pkg.go.dev` for API documentation|
 |**Access Control**| 1) Private links won't be listed in public index page; 2) Allow link to be accessible only after a configured time point; 3) Allow warn to visitors about external URL redirects (for liability control)|
 |**Public Indexes**| Router `/s` provides a list of avaliable short links |
@@ -26,7 +26,7 @@ There are three major pages available in redir.
 
 | Admin Dashboard | Access Control | Public Indexes |
 |:---------------:|:--------------:|:--------------:|
-| Router: `/s?mode=admin` or<br/>`/r?mode=admin` for management:<br/>![](./assets/admin.png) | Control a link should only be available after a certain time:<br/>![](./assets/wait.png) | Router `/s` or `/r` provides public accessibility to see all public links:<br/>![](./assets/index.png) |
+| Router: `/s?mode=admin` for management:<br/>![](./.github/assets/admin.png) | Control a link should only be available after a certain time:<br/>![](./.github/assets/wait.png) | Router `/s` provides public accessibility to see all public links:<br/>![](./.github/assets/index.png) |
 
 ## CLI Usage
 
