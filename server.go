@@ -12,8 +12,11 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
 
 	"changkun.de/x/redir/internal/cache"
 	"changkun.de/x/redir/internal/config"
@@ -25,6 +28,9 @@ import (
 type server struct {
 	db    *db.Store
 	cache *cache.LRU
+
+	app     *newrelic.Application
+	monitor func(*newrelic.Application, string, http.Handler) (string, http.Handler)
 }
 
 var (
@@ -93,23 +99,52 @@ func (s *server) close() {
 	log.Println(s.db.Close())
 }
 
+func (s *server) registerNewRelic() {
+	name := os.Getenv("NEWRELIC_NAME")
+	lice := os.Getenv("NEWRELIC_LICENSE")
+
+	s.monitor = newrelic.WrapHandle
+	if name == "" || lice == "" {
+		// Don't use NewRelic if name or license is missing.
+		s.monitor = func(app *newrelic.Application, pattern string, handler http.Handler) (string, http.Handler) {
+			return pattern, handler
+		}
+		log.Println("NewRelic is deactivated.")
+		return
+	}
+
+	var err error
+	s.app, err = newrelic.NewApplication(
+		newrelic.ConfigAppName(os.Getenv("NEWRELIC_NAME")),
+		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE")),
+		newrelic.ConfigDistributedTracerEnabled(true),
+	)
+	if err != nil {
+		log.Fatalf("Failed to created NewRelic application: %v", err)
+	}
+
+	log.Println("NewRelic is activated.")
+}
+
 func (s *server) registerHandler() {
+	s.registerNewRelic()
+
 	l := utils.Logging()
 
 	// semantic shortener (default)
 	log.Println("router /s is enabled.")
-	http.Handle(config.Conf.S.Prefix, l(s.shortHandler(models.KindShort)))
+	http.Handle(s.monitor(s.app, config.Conf.S.Prefix, l(s.shortHandler(models.KindShort))))
 
 	// random shortener
 	if config.Conf.R.Enable {
 		log.Println("router /r is enabled.")
-		http.Handle(config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom)))
+		http.Handle(s.monitor(s.app, config.Conf.R.Prefix, l(s.shortHandler(models.KindRandom))))
 	}
 
 	// repo redirector
 	if config.Conf.X.Enable {
 		log.Println("router /x is enabled.")
-		http.Handle(config.Conf.X.Prefix, l(s.xHandler()))
+		http.Handle(s.monitor(s.app, config.Conf.X.Prefix, l(s.xHandler())))
 	}
 }
 
@@ -117,8 +152,8 @@ func (s *server) registerHandler() {
 // the tree rooted at importPath to pkg.go.dev pages for those import paths.
 // The redirections include headers directing `go get.` to satisfy the
 // imports by checking out code from repoPath using the configured VCS.
-func (s *server) xHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+func (s *server) xHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 		importPath := strings.TrimSuffix(req.Host+config.Conf.X.Prefix, "/")
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
@@ -156,5 +191,5 @@ func (s *server) xHandler() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-	})
+	}
 }

@@ -28,6 +28,7 @@ auth:
       password: redir
 stats:
   enable: true
+  newrelic: true
 gdpr:
   hide_ip: false
   owner:
