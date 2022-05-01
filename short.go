@@ -222,6 +222,19 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If this is a page that refers to a PDF, we prefer serve it as a PDF
+	// content directly rather than redirect.
+	if strings.HasSuffix(red.URL, ".pdf") {
+		resp, err := http.Get(red.URL)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		_, err = io.Copy(w, resp.Body)
+		return
+	}
+
 	// Finally, let's redirect!
 	http.Redirect(w, r, red.URL, http.StatusTemporaryRedirect)
 }
