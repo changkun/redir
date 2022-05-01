@@ -9,8 +9,6 @@ services:
     image: redir:latest
     environment:
       REDIR_CONF: ./data/redirconf.yml
-      NEWRELIC_NAME: ${NEWRELIC_NAME}
-      NEWRELIC_LICENSE: ${NEWRELIC_LICENSE}
     depends_on:
       - mongo
     deploy:

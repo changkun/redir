@@ -52,8 +52,7 @@ type config struct {
 		} `yaml:"basic"`
 	} `yaml:"auth"`
 	Stats struct {
-		Enable   bool `yaml:"enable"`
-		NewRelic bool `yaml:"newrelic"`
+		Enable bool `yaml:"enable"`
 	} `yaml:"stats"`
 	GDPR struct {
 		HideIP bool `yaml:"hide_ip"`
