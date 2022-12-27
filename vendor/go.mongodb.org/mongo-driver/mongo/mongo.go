@@ -65,77 +65,15 @@ func (me MarshalError) Error() string {
 //
 // Example usage:
 //
-//		mongo.Pipeline{
-//			{{"$group", bson.D{{"_id", "$state"}, {"totalPop", bson.D{{"$sum", "$pop"}}}}}},
-//			{{"$match", bson.D{{"totalPop", bson.D{{"$gte", 10*1000*1000}}}}}},
-//		}
-//
+//	mongo.Pipeline{
+//		{{"$group", bson.D{{"_id", "$state"}, {"totalPop", bson.D{{"$sum", "$pop"}}}}}},
+//		{{"$match", bson.D{{"totalPop", bson.D{{"$gte", 10*1000*1000}}}}}},
+//	}
 type Pipeline []bson.D
 
-// transformAndEnsureID is a hack that makes it easy to get a RawValue as the _id value. This will
-// be removed when we switch from using bsonx to bsoncore for the driver package.
-func transformAndEnsureID(registry *bsoncodec.Registry, val interface{}) (bsonx.Doc, interface{}, error) {
-	// TODO: performance is going to be pretty bad for bsonx.Doc here since we turn it into a []byte
-	// only to turn it back into a bsonx.Doc. We can fix this post beta1 when we refactor the driver
-	// package to use bsoncore.Document instead of bsonx.Doc.
-	if registry == nil {
-		registry = bson.NewRegistryBuilder().Build()
-	}
-	switch tt := val.(type) {
-	case nil:
-		return nil, nil, ErrNilDocument
-	case bsonx.Doc:
-		val = tt.Copy()
-	case []byte:
-		// Slight optimization so we'll just use MarshalBSON and not go through the codec machinery.
-		val = bson.Raw(tt)
-	}
-
-	// TODO(skriptble): Use a pool of these instead.
-	buf := make([]byte, 0, 256)
-	b, err := bson.MarshalAppendWithRegistry(registry, buf, val)
-	if err != nil {
-		return nil, nil, MarshalError{Value: val, Err: err}
-	}
-
-	d, err := bsonx.ReadDoc(b)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var id interface{}
-
-	idx := d.IndexOf("_id")
-	var idElem bsonx.Elem
-	switch idx {
-	case -1:
-		idElem = bsonx.Elem{"_id", bsonx.ObjectID(primitive.NewObjectID())}
-		d = append(d, bsonx.Elem{})
-		copy(d[1:], d)
-		d[0] = idElem
-	default:
-		idElem = d[idx]
-		copy(d[1:idx+1], d[0:idx])
-		d[0] = idElem
-	}
-
-	idBuf := make([]byte, 0, 256)
-	t, data, err := idElem.Value.MarshalAppendBSONValue(idBuf[:0])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = bson.RawValue{Type: t, Value: data}.UnmarshalWithRegistry(registry, &id)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return d, id, nil
-}
-
-// transformAndEnsureIDv2 is a hack that makes it easy to get a RawValue as the _id value. This will
-// be removed when we switch from using bsonx to bsoncore for the driver package.
-func transformAndEnsureIDv2(registry *bsoncodec.Registry, val interface{}) (bsoncore.Document, interface{}, error) {
+// transformAndEnsureID is a hack that makes it easy to get a RawValue as the _id value.
+// It will also add an ObjectID _id as the first key if it not already present in the passed-in val.
+func transformAndEnsureID(registry *bsoncodec.Registry, val interface{}) (bsoncore.Document, interface{}, error) {
 	if registry == nil {
 		registry = bson.NewRegistryBuilder().Build()
 	}
@@ -184,17 +122,6 @@ func transformAndEnsureIDv2(registry *bsoncodec.Registry, val interface{}) (bson
 	return doc, id, nil
 }
 
-func transformDocument(registry *bsoncodec.Registry, val interface{}) (bsonx.Doc, error) {
-	if doc, ok := val.(bsonx.Doc); ok {
-		return doc.Copy(), nil
-	}
-	b, err := transformBsoncoreDocument(registry, val, true, "document")
-	if err != nil {
-		return nil, err
-	}
-	return bsonx.ReadDoc(b)
-}
-
 func transformBsoncoreDocument(registry *bsoncodec.Registry, val interface{}, mapAllowed bool, paramName string) (bsoncore.Document, error) {
 	if registry == nil {
 		registry = bson.DefaultRegistry
@@ -222,32 +149,7 @@ func transformBsoncoreDocument(registry *bsoncodec.Registry, val interface{}, ma
 	return b, nil
 }
 
-func ensureID(d bsonx.Doc) (bsonx.Doc, interface{}) {
-	var id interface{}
-
-	elem, err := d.LookupElementErr("_id")
-	switch err.(type) {
-	case nil:
-		id = elem
-	default:
-		oid := primitive.NewObjectID()
-		d = append(d, bsonx.Elem{"_id", bsonx.ObjectID(oid)})
-		id = oid
-	}
-	return d, id
-}
-
-func ensureDollarKey(doc bsonx.Doc) error {
-	if len(doc) == 0 {
-		return errors.New("update document must have at least one element")
-	}
-	if !strings.HasPrefix(doc[0].Key, "$") {
-		return errors.New("update document must contain key beginning with '$'")
-	}
-	return nil
-}
-
-func ensureDollarKeyv2(doc bsoncore.Document) error {
+func ensureDollarKey(doc bsoncore.Document) error {
 	firstElem, err := doc.IndexErr(0)
 	if err != nil {
 		return errors.New("update document must have at least one element")
@@ -261,45 +163,13 @@ func ensureDollarKeyv2(doc bsoncore.Document) error {
 
 func ensureNoDollarKey(doc bsoncore.Document) error {
 	if elem, err := doc.IndexErr(0); err == nil && strings.HasPrefix(elem.Key(), "$") {
-		return errors.New("replacement document cannot contains keys beginning with '$")
+		return errors.New("replacement document cannot contain keys beginning with '$'")
 	}
 
 	return nil
 }
 
-func transformAggregatePipeline(registry *bsoncodec.Registry, pipeline interface{}) (bsonx.Arr, error) {
-	pipelineArr := bsonx.Arr{}
-	switch t := pipeline.(type) {
-	case bsoncodec.ValueMarshaler:
-		btype, val, err := t.MarshalBSONValue()
-		if err != nil {
-			return nil, err
-		}
-		if btype != bsontype.Array {
-			return nil, fmt.Errorf("ValueMarshaler returned a %v, but was expecting %v", btype, bsontype.Array)
-		}
-		err = pipelineArr.UnmarshalBSONValue(btype, val)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		val := reflect.ValueOf(t)
-		if !val.IsValid() || (val.Kind() != reflect.Slice && val.Kind() != reflect.Array) {
-			return nil, fmt.Errorf("can only transform slices and arrays into aggregation pipelines, but got %v", val.Kind())
-		}
-		for idx := 0; idx < val.Len(); idx++ {
-			elem, err := transformDocument(registry, val.Index(idx).Interface())
-			if err != nil {
-				return nil, err
-			}
-			pipelineArr = append(pipelineArr, bsonx.Document(elem))
-		}
-	}
-
-	return pipelineArr, nil
-}
-
-func transformAggregatePipelinev2(registry *bsoncodec.Registry, pipeline interface{}) (bsoncore.Document, bool, error) {
+func transformAggregatePipeline(registry *bsoncodec.Registry, pipeline interface{}) (bsoncore.Document, bool, error) {
 	switch t := pipeline.(type) {
 	case bsoncodec.ValueMarshaler:
 		btype, val, err := t.MarshalBSONValue()
@@ -328,9 +198,43 @@ func transformAggregatePipelinev2(registry *bsoncodec.Registry, pipeline interfa
 			return nil, false, fmt.Errorf("can only transform slices and arrays into aggregation pipelines, but got %v", val.Kind())
 		}
 
-		aidx, arr := bsoncore.AppendArrayStart(nil)
 		var hasOutputStage bool
 		valLen := val.Len()
+
+		switch t := pipeline.(type) {
+		// Explicitly forbid non-empty pipelines that are semantically single documents
+		// and are implemented as slices.
+		case bson.D, bson.Raw, bsoncore.Document:
+			if valLen > 0 {
+				return nil, false,
+					fmt.Errorf("%T is not an allowed pipeline type as it represents a single document. Use bson.A or mongo.Pipeline instead", t)
+			}
+		// bsoncore.Arrays do not need to be transformed. Only check validity and presence of output stage.
+		case bsoncore.Array:
+			if err := t.Validate(); err != nil {
+				return nil, false, err
+			}
+
+			values, err := t.Values()
+			if err != nil {
+				return nil, false, err
+			}
+
+			numVals := len(values)
+			if numVals == 0 {
+				return bsoncore.Document(t), false, nil
+			}
+
+			// If not empty, check if first value of the last stage is $out or $merge.
+			if lastStage, ok := values[numVals-1].DocumentOK(); ok {
+				if elem, err := lastStage.IndexErr(0); err == nil && (elem.Key() == "$out" || elem.Key() == "$merge") {
+					hasOutputStage = true
+				}
+			}
+			return bsoncore.Document(t), hasOutputStage, nil
+		}
+
+		aidx, arr := bsoncore.AppendArrayStart(nil)
 		for idx := 0; idx < valLen; idx++ {
 			doc, err := transformBsoncoreDocument(registry, val.Index(idx).Interface(), true, fmt.Sprintf("pipeline stage :%v", idx))
 			if err != nil {
@@ -350,7 +254,7 @@ func transformAggregatePipelinev2(registry *bsoncodec.Registry, pipeline interfa
 }
 
 func transformUpdateValue(registry *bsoncodec.Registry, update interface{}, dollarKeysAllowed bool) (bsoncore.Value, error) {
-	documentCheckerFunc := ensureDollarKeyv2
+	documentCheckerFunc := ensureDollarKey
 	if !dollarKeysAllowed {
 		documentCheckerFunc = ensureNoDollarKey
 	}

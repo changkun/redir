@@ -1,10 +1,15 @@
-// NOTE: This file is maintained by hand because operationgen cannot generate it.
+// Copyright (C) MongoDB, Inc. 2021-present.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 package operation
 
 import (
 	"context"
 	"errors"
+	"time"
 
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo/description"
@@ -26,29 +31,47 @@ type Command struct {
 	clock          *session.ClusterClock
 	session        *session.Client
 	monitor        *event.CommandMonitor
-	result         bsoncore.Document
-	srvr           driver.Server
-	desc           description.Server
-	crypt          *driver.Crypt
+	resultResponse bsoncore.Document
+	resultCursor   *driver.BatchCursor
+	crypt          driver.Crypt
+	serverAPI      *driver.ServerAPIOptions
+	createCursor   bool
+	cursorOpts     driver.CursorOptions
+	timeout        *time.Duration
 }
 
-// NewCommand constructs and returns a new Command.
-func NewCommand(command bsoncore.Document) *Command { return &Command{command: command} }
+// NewCommand constructs and returns a new Command. Once the operation is executed, the result may only be accessed via
+// the Result() function.
+func NewCommand(command bsoncore.Document) *Command {
+	return &Command{
+		command: command,
+	}
+}
+
+// NewCursorCommand constructs a new Command. Once the operation is executed, the server response will be used to
+// construct a cursor, which can be accessed via the ResultCursor() function.
+func NewCursorCommand(command bsoncore.Document, cursorOpts driver.CursorOptions) *Command {
+	return &Command{
+		command:      command,
+		cursorOpts:   cursorOpts,
+		createCursor: true,
+	}
+}
 
 // Result returns the result of executing this operation.
-func (c *Command) Result() bsoncore.Document { return c.result }
+func (c *Command) Result() bsoncore.Document { return c.resultResponse }
 
-// ResultCursor parses the command response as a cursor and returns the resulting BatchCursor.
-func (c *Command) ResultCursor(opts driver.CursorOptions) (*driver.BatchCursor, error) {
-	cursorRes, err := driver.NewCursorResponse(c.result, c.srvr, c.desc)
-	if err != nil {
-		return nil, err
+// ResultCursor returns the BatchCursor that was constructed using the command response. If the operation was not
+// configured to create a cursor (i.e. it was created using NewCommand rather than NewCursorCommand), this function
+// will return nil and an error.
+func (c *Command) ResultCursor() (*driver.BatchCursor, error) {
+	if !c.createCursor {
+		return nil, errors.New("command operation was not configured to create a cursor, but a result cursor was requested")
 	}
-
-	return driver.NewBatchCursor(cursorRes, c.session, c.clock, opts)
+	return c.resultCursor, nil
 }
 
-// Execute runs this operations and returns an error if the operaiton did not execute successfully.
+// Execute runs this operations and returns an error if the operation did not execute successfully.
 func (c *Command) Execute(ctx context.Context) error {
 	if c.deployment == nil {
 		return errors.New("the Command operation must have a Deployment set before Execute can be called")
@@ -58,10 +81,19 @@ func (c *Command) Execute(ctx context.Context) error {
 		CommandFn: func(dst []byte, desc description.SelectedServer) ([]byte, error) {
 			return append(dst, c.command[4:len(c.command)-1]...), nil
 		},
-		ProcessResponseFn: func(resp bsoncore.Document, srvr driver.Server, desc description.Server, currIndex int) error {
-			c.result = resp
-			c.srvr = srvr
-			c.desc = desc
+		ProcessResponseFn: func(info driver.ResponseInfo) error {
+			c.resultResponse = info.ServerResponse
+
+			if c.createCursor {
+				cursorRes, err := driver.NewCursorResponse(info)
+				if err != nil {
+					return err
+				}
+
+				c.resultCursor, err = driver.NewBatchCursor(cursorRes, c.session, c.clock, c.cursorOpts)
+				return err
+			}
+
 			return nil
 		},
 		Client:         c.session,
@@ -72,17 +104,9 @@ func (c *Command) Execute(ctx context.Context) error {
 		ReadPreference: c.readPreference,
 		Selector:       c.selector,
 		Crypt:          c.crypt,
-	}.Execute(ctx, nil)
-}
-
-// Command sets the command to be run.
-func (c *Command) Command(command bsoncore.Document) *Command {
-	if c == nil {
-		c = new(Command)
-	}
-
-	c.command = command
-	return c
+		ServerAPI:      c.serverAPI,
+		Timeout:        c.timeout,
+	}.Execute(ctx)
 }
 
 // Session sets the session for this operation.
@@ -145,7 +169,7 @@ func (c *Command) ReadConcern(readConcern *readconcern.ReadConcern) *Command {
 	return c
 }
 
-// ReadPreference set the read prefernce used with this operation.
+// ReadPreference set the read preference used with this operation.
 func (c *Command) ReadPreference(readPreference *readpref.ReadPref) *Command {
 	if c == nil {
 		c = new(Command)
@@ -166,11 +190,31 @@ func (c *Command) ServerSelector(selector description.ServerSelector) *Command {
 }
 
 // Crypt sets the Crypt object to use for automatic encryption and decryption.
-func (c *Command) Crypt(crypt *driver.Crypt) *Command {
+func (c *Command) Crypt(crypt driver.Crypt) *Command {
 	if c == nil {
 		c = new(Command)
 	}
 
 	c.crypt = crypt
+	return c
+}
+
+// ServerAPI sets the server API version for this operation.
+func (c *Command) ServerAPI(serverAPI *driver.ServerAPIOptions) *Command {
+	if c == nil {
+		c = new(Command)
+	}
+
+	c.serverAPI = serverAPI
+	return c
+}
+
+// Timeout sets the timeout for this operation.
+func (c *Command) Timeout(timeout *time.Duration) *Command {
+	if c == nil {
+		c = new(Command)
+	}
+
+	c.timeout = timeout
 	return c
 }

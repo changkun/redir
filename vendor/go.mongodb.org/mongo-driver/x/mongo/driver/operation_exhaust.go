@@ -9,24 +9,32 @@ package driver
 import (
 	"context"
 	"errors"
-
-	"go.mongodb.org/mongo-driver/mongo/description"
 )
 
 // ExecuteExhaust reads a response from the provided StreamerConnection. This will error if the connection's
 // CurrentlyStreaming function returns false.
-func (op Operation) ExecuteExhaust(ctx context.Context, conn StreamerConnection, scratch []byte) error {
+func (op Operation) ExecuteExhaust(ctx context.Context, conn StreamerConnection) error {
 	if !conn.CurrentlyStreaming() {
 		return errors.New("exhaust read must be done with a connection that is currently streaming")
 	}
 
-	scratch = scratch[:0]
-	res, err := op.readWireMessage(ctx, conn, scratch)
+	wm := memoryPool.Get().(*[]byte)
+	defer func() {
+		memoryPool.Put(wm)
+	}()
+	var res []byte
+	var err error
+	res, *wm, err = op.readWireMessage(ctx, conn, (*wm)[:0])
 	if err != nil {
 		return err
 	}
 	if op.ProcessResponseFn != nil {
-		if err = op.ProcessResponseFn(res, nil, description.Server{}, 0); err != nil {
+		// Server, ConnectionDescription, and CurrentIndex are unused in this mode.
+		info := ResponseInfo{
+			ServerResponse: res,
+			Connection:     conn,
+		}
+		if err = op.ProcessResponseFn(info); err != nil {
 			return err
 		}
 	}

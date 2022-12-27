@@ -4,6 +4,7 @@
 // not use this file except in compliance with the License. You may obtain
 // a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
+//go:build !cse
 // +build !cse
 
 package mongocrypt
@@ -52,5 +53,10 @@ func (c *Context) Finish() (bsoncore.Document, error) {
 
 // Close cleans up any resources associated with the given Context instance.
 func (c *Context) Close() {
+	panic(cseNotSupportedMsg)
+}
+
+// ProvideKmsProviders provides the KMS providers when in the NeedKmsCredentials state.
+func (c *Context) ProvideKmsProviders(kmsProviders bsoncore.Document) error {
 	panic(cseNotSupportedMsg)
 }

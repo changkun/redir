@@ -73,7 +73,7 @@ func (sc *saslConversation) FirstMessage() (bsoncore.Document, error) {
 		bsoncore.AppendBinaryElement(nil, "payload", 0x00, payload),
 	}
 	if sc.speculative {
-		// The "db" field is only appended for speculative auth because the isMaster command is executed against admin
+		// The "db" field is only appended for speculative auth because the hello command is executed against admin
 		// so this is needed to tell the server the user's auth source. For a non-speculative attempt, the SASL commands
 		// will be executed against the auth source.
 		saslCmdElements = append(saslCmdElements, bsoncore.AppendStringElement(nil, "db", sc.source))
@@ -135,7 +135,8 @@ func (sc *saslConversation) Finish(ctx context.Context, cfg *Config, firstRespon
 		saslContinueCmd := operation.NewCommand(doc).
 			Database(sc.source).
 			Deployment(driver.SingleConnectionDeployment{cfg.Connection}).
-			ClusterClock(cfg.ClusterClock)
+			ClusterClock(cfg.ClusterClock).
+			ServerAPI(cfg.ServerAPI)
 
 		err = saslContinueCmd.Execute(ctx)
 		if err != nil {
@@ -163,7 +164,8 @@ func ConductSaslConversation(ctx context.Context, cfg *Config, authSource string
 	saslStartCmd := operation.NewCommand(saslStartDoc).
 		Database(authSource).
 		Deployment(driver.SingleConnectionDeployment{cfg.Connection}).
-		ClusterClock(cfg.ClusterClock)
+		ClusterClock(cfg.ClusterClock).
+		ServerAPI(cfg.ServerAPI)
 	if err := saslStartCmd.Execute(ctx); err != nil {
 		return newError(err, conversation.mechanism)
 	}

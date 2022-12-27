@@ -8,15 +8,16 @@ package mongo
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"strings"
+	"net/http"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal"
+	"go.mongodb.org/mongo-driver/internal/uuid"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
@@ -24,16 +25,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/auth"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/ocsp"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/mongocrypt"
+	mcopts "go.mongodb.org/mongo-driver/x/mongo/driver/mongocrypt/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/operation"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/topology"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/uuid"
 )
 
-const defaultLocalThreshold = 15 * time.Millisecond
+const (
+	defaultLocalThreshold = 15 * time.Millisecond
+	defaultMaxPoolSize    = 100
+)
 
 var (
 	// keyVaultCollOpts specifies options used to communicate with the key vault collection
@@ -49,30 +51,31 @@ var (
 // The Client type opens and closes connections automatically and maintains a pool of idle connections. For
 // connection pool configuration options, see documentation for the ClientOptions type in the mongo/options package.
 type Client struct {
-	id              uuid.UUID
-	topologyOptions []topology.Option
-	deployment      driver.Deployment
-	connString      connstring.ConnString
-	localThreshold  time.Duration
-	retryWrites     bool
-	retryReads      bool
-	clock           *session.ClusterClock
-	readPreference  *readpref.ReadPref
-	readConcern     *readconcern.ReadConcern
-	writeConcern    *writeconcern.WriteConcern
-	registry        *bsoncodec.Registry
-	marshaller      BSONAppender
-	monitor         *event.CommandMonitor
-	serverMonitor   *event.ServerMonitor
-	sessionPool     *session.Pool
+	id             uuid.UUID
+	deployment     driver.Deployment
+	localThreshold time.Duration
+	retryWrites    bool
+	retryReads     bool
+	clock          *session.ClusterClock
+	readPreference *readpref.ReadPref
+	readConcern    *readconcern.ReadConcern
+	writeConcern   *writeconcern.WriteConcern
+	registry       *bsoncodec.Registry
+	monitor        *event.CommandMonitor
+	serverAPI      *driver.ServerAPIOptions
+	serverMonitor  *event.ServerMonitor
+	sessionPool    *session.Pool
+	timeout        *time.Duration
+	httpClient     *http.Client
 
 	// client-side encryption fields
-	keyVaultClientFLE *Client
-	keyVaultCollFLE   *Collection
-	mongocryptdFLE    *mcryptClient
-	cryptFLE          *driver.Crypt
-	metadataClientFLE *Client
-	internalClientFLE *Client
+	keyVaultClientFLE  *Client
+	keyVaultCollFLE    *Collection
+	mongocryptdFLE     *mongocryptdClient
+	cryptFLE           driver.Crypt
+	metadataClientFLE  *Client
+	internalClientFLE  *Client
+	encryptedFieldsMap map[string]interface{}
 }
 
 // Connect creates a new Client and then initializes it using the Connect method. This is equivalent to calling
@@ -131,13 +134,84 @@ func NewClient(opts ...*options.ClientOptions) (*Client, error) {
 	}
 	client := &Client{id: id}
 
-	err = client.configure(clientOpt)
+	// ClusterClock
+	client.clock = new(session.ClusterClock)
+
+	// LocalThreshold
+	client.localThreshold = defaultLocalThreshold
+	if clientOpt.LocalThreshold != nil {
+		client.localThreshold = *clientOpt.LocalThreshold
+	}
+	// Monitor
+	if clientOpt.Monitor != nil {
+		client.monitor = clientOpt.Monitor
+	}
+	// ServerMonitor
+	if clientOpt.ServerMonitor != nil {
+		client.serverMonitor = clientOpt.ServerMonitor
+	}
+	// ReadConcern
+	client.readConcern = readconcern.New()
+	if clientOpt.ReadConcern != nil {
+		client.readConcern = clientOpt.ReadConcern
+	}
+	// ReadPreference
+	client.readPreference = readpref.Primary()
+	if clientOpt.ReadPreference != nil {
+		client.readPreference = clientOpt.ReadPreference
+	}
+	// Registry
+	client.registry = bson.DefaultRegistry
+	if clientOpt.Registry != nil {
+		client.registry = clientOpt.Registry
+	}
+	// RetryWrites
+	client.retryWrites = true // retry writes on by default
+	if clientOpt.RetryWrites != nil {
+		client.retryWrites = *clientOpt.RetryWrites
+	}
+	client.retryReads = true
+	if clientOpt.RetryReads != nil {
+		client.retryReads = *clientOpt.RetryReads
+	}
+	// Timeout
+	client.timeout = clientOpt.Timeout
+	client.httpClient = clientOpt.HTTPClient
+	// WriteConcern
+	if clientOpt.WriteConcern != nil {
+		client.writeConcern = clientOpt.WriteConcern
+	}
+	// AutoEncryptionOptions
+	if clientOpt.AutoEncryptionOptions != nil {
+		if err := client.configureAutoEncryption(clientOpt); err != nil {
+			return nil, err
+		}
+	} else {
+		client.cryptFLE = clientOpt.Crypt
+	}
+
+	// Deployment
+	if clientOpt.Deployment != nil {
+		client.deployment = clientOpt.Deployment
+	}
+
+	// Set default options
+	if clientOpt.MaxPoolSize == nil {
+		clientOpt.SetMaxPoolSize(defaultMaxPoolSize)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
+	cfg, err := topology.NewConfig(clientOpt, client.clock)
+	if err != nil {
+		return nil, err
+	}
+	client.serverAPI = topology.ServerAPIFromServerOptions(cfg.ServerOpts)
+
 	if client.deployment == nil {
-		client.deployment, err = topology.New(client.topologyOptions...)
+		client.deployment, err = topology.New(cfg)
 		if err != nil {
 			return nil, replaceErrors(err)
 		}
@@ -207,6 +281,10 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
+	if c.httpClient == internal.DefaultHTTPClient {
+		defer internal.CloseIdleHTTPConnections(c.httpClient)
+	}
+
 	c.endSessions(ctx)
 	if c.mongocryptdFLE != nil {
 		if err := c.mongocryptdFLE.disconnect(ctx); err != nil {
@@ -237,12 +315,13 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	if disconnector, ok := c.deployment.(driver.Disconnector); ok {
 		return replaceErrors(disconnector.Disconnect(ctx))
 	}
+
 	return nil
 }
 
 // Ping sends a ping command to verify that the client can connect to the deployment.
 //
-// The rp paramter is used to determine which server is selected for the operation.
+// The rp parameter is used to determine which server is selected for the operation.
 // If it is nil, the client's read preference is used.
 //
 // If the server is down, Ping will try to select a server until the client's server selection timeout expires.
@@ -269,6 +348,12 @@ func (c *Client) Ping(ctx context.Context, rp *readpref.ReadPref) error {
 }
 
 // StartSession starts a new session configured with the given options.
+//
+// StartSession does not actually communicate with the server and will not error if the client is
+// disconnected.
+//
+// StartSession is safe to call from multiple goroutines concurrently. However, Sessions returned by StartSession are
+// not safe for concurrent use by multiple goroutines.
 //
 // If the DefaultReadConcern, DefaultWriteConcern, or DefaultReadPreference options are not set, the client's read
 // concern, write concern, or read preference will be used, respectively.
@@ -298,6 +383,9 @@ func (c *Client) StartSession(opts ...*options.SessionOptions) (Session, error) 
 	if sopts.DefaultMaxCommitTime != nil {
 		coreOpts.DefaultMaxCommitTime = sopts.DefaultMaxCommitTime
 	}
+	if sopts.Snapshot != nil {
+		coreOpts.Snapshot = sopts.Snapshot
+	}
 
 	sess, err := session.NewClientSession(c.sessionPool, c.id, session.Explicit, coreOpts)
 	if err != nil {
@@ -323,7 +411,7 @@ func (c *Client) endSessions(ctx context.Context) {
 	sessionIDs := c.sessionPool.IDSlice()
 	op := operation.NewEndSessions(nil).ClusterClock(c.clock).Deployment(c.deployment).
 		ServerSelector(description.ReadPrefSelector(readpref.PrimaryPreferred())).CommandMonitor(c.monitor).
-		Database("admin").Crypt(c.cryptFLE)
+		Database("admin").Crypt(c.cryptFLE).ServerAPI(c.serverAPI)
 
 	totalNumIDs := len(sessionIDs)
 	var currentBatch []bsoncore.Document
@@ -343,311 +431,31 @@ func (c *Client) endSessions(ctx context.Context) {
 	}
 }
 
-func (c *Client) configure(opts *options.ClientOptions) error {
-	if err := opts.Validate(); err != nil {
-		return err
-	}
-
-	var connOpts []topology.ConnectionOption
-	var serverOpts []topology.ServerOption
-	var topologyOpts []topology.Option
-
-	// TODO(GODRIVER-814): Add tests for topology, server, and connection related options.
-
-	// ClusterClock
-	c.clock = new(session.ClusterClock)
-
-	// Pass down URI so topology can determine whether or not SRV polling is required
-	topologyOpts = append(topologyOpts, topology.WithURI(func(uri string) string {
-		return opts.GetURI()
-	}))
-
-	// AppName
-	var appName string
-	if opts.AppName != nil {
-		appName = *opts.AppName
-
-		serverOpts = append(serverOpts, topology.WithServerAppName(func(string) string {
-			return appName
-		}))
-	}
-	// Compressors & ZlibLevel
-	var comps []string
-	if len(opts.Compressors) > 0 {
-		comps = opts.Compressors
-
-		connOpts = append(connOpts, topology.WithCompressors(
-			func(compressors []string) []string {
-				return append(compressors, comps...)
-			},
-		))
-
-		for _, comp := range comps {
-			switch comp {
-			case "zlib":
-				connOpts = append(connOpts, topology.WithZlibLevel(func(level *int) *int {
-					return opts.ZlibLevel
-				}))
-			case "zstd":
-				connOpts = append(connOpts, topology.WithZstdLevel(func(level *int) *int {
-					return opts.ZstdLevel
-				}))
-			}
-		}
-
-		serverOpts = append(serverOpts, topology.WithCompressionOptions(
-			func(opts ...string) []string { return append(opts, comps...) },
-		))
-	}
-	// Handshaker
-	var handshaker = func(driver.Handshaker) driver.Handshaker {
-		return operation.NewIsMaster().AppName(appName).Compressors(comps).ClusterClock(c.clock)
-	}
-	// Auth & Database & Password & Username
-	if opts.Auth != nil {
-		cred := &auth.Cred{
-			Username:    opts.Auth.Username,
-			Password:    opts.Auth.Password,
-			PasswordSet: opts.Auth.PasswordSet,
-			Props:       opts.Auth.AuthMechanismProperties,
-			Source:      opts.Auth.AuthSource,
-		}
-		mechanism := opts.Auth.AuthMechanism
-
-		if len(cred.Source) == 0 {
-			switch strings.ToUpper(mechanism) {
-			case auth.MongoDBX509, auth.GSSAPI, auth.PLAIN:
-				cred.Source = "$external"
-			default:
-				cred.Source = "admin"
-			}
-		}
-
-		authenticator, err := auth.CreateAuthenticator(mechanism, cred)
-		if err != nil {
-			return err
-		}
-
-		handshakeOpts := &auth.HandshakeOptions{
-			AppName:       appName,
-			Authenticator: authenticator,
-			Compressors:   comps,
-			ClusterClock:  c.clock,
-		}
-		if mechanism == "" {
-			// Required for SASL mechanism negotiation during handshake
-			handshakeOpts.DBUser = cred.Source + "." + cred.Username
-		}
-		if opts.AuthenticateToAnything != nil && *opts.AuthenticateToAnything {
-			// Authenticate arbiters
-			handshakeOpts.PerformAuthentication = func(serv description.Server) bool {
-				return true
-			}
-		}
-
-		handshaker = func(driver.Handshaker) driver.Handshaker {
-			return auth.Handshaker(nil, handshakeOpts)
-		}
-	}
-	connOpts = append(connOpts, topology.WithHandshaker(handshaker))
-	// ConnectTimeout
-	if opts.ConnectTimeout != nil {
-		serverOpts = append(serverOpts, topology.WithHeartbeatTimeout(
-			func(time.Duration) time.Duration { return *opts.ConnectTimeout },
-		))
-		connOpts = append(connOpts, topology.WithConnectTimeout(
-			func(time.Duration) time.Duration { return *opts.ConnectTimeout },
-		))
-	}
-	// Dialer
-	if opts.Dialer != nil {
-		connOpts = append(connOpts, topology.WithDialer(
-			func(topology.Dialer) topology.Dialer { return opts.Dialer },
-		))
-	}
-	// Direct
-	if opts.Direct != nil && *opts.Direct {
-		topologyOpts = append(topologyOpts, topology.WithMode(
-			func(topology.MonitorMode) topology.MonitorMode { return topology.SingleMode },
-		))
-	}
-	// HeartbeatInterval
-	if opts.HeartbeatInterval != nil {
-		serverOpts = append(serverOpts, topology.WithHeartbeatInterval(
-			func(time.Duration) time.Duration { return *opts.HeartbeatInterval },
-		))
-	}
-	// Hosts
-	hosts := []string{"localhost:27017"} // default host
-	if len(opts.Hosts) > 0 {
-		hosts = opts.Hosts
-	}
-	topologyOpts = append(topologyOpts, topology.WithSeedList(
-		func(...string) []string { return hosts },
-	))
-	// LocalThreshold
-	c.localThreshold = defaultLocalThreshold
-	if opts.LocalThreshold != nil {
-		c.localThreshold = *opts.LocalThreshold
-	}
-	// MaxConIdleTime
-	if opts.MaxConnIdleTime != nil {
-		connOpts = append(connOpts, topology.WithIdleTimeout(
-			func(time.Duration) time.Duration { return *opts.MaxConnIdleTime },
-		))
-	}
-	// MaxPoolSize
-	if opts.MaxPoolSize != nil {
-		serverOpts = append(
-			serverOpts,
-			topology.WithMaxConnections(func(uint64) uint64 { return *opts.MaxPoolSize }),
-		)
-	}
-	// MinPoolSize
-	if opts.MinPoolSize != nil {
-		serverOpts = append(
-			serverOpts,
-			topology.WithMinConnections(func(uint64) uint64 { return *opts.MinPoolSize }),
-		)
-	}
-	// PoolMonitor
-	if opts.PoolMonitor != nil {
-		serverOpts = append(
-			serverOpts,
-			topology.WithConnectionPoolMonitor(func(*event.PoolMonitor) *event.PoolMonitor { return opts.PoolMonitor }),
-		)
-	}
-	// Monitor
-	if opts.Monitor != nil {
-		c.monitor = opts.Monitor
-		connOpts = append(connOpts, topology.WithMonitor(
-			func(*event.CommandMonitor) *event.CommandMonitor { return opts.Monitor },
-		))
-	}
-	// ServerMonitor
-	if opts.ServerMonitor != nil {
-		c.serverMonitor = opts.ServerMonitor
-		serverOpts = append(
-			serverOpts,
-			topology.WithServerMonitor(func(*event.ServerMonitor) *event.ServerMonitor { return opts.ServerMonitor }),
-		)
-
-		topologyOpts = append(
-			topologyOpts,
-			topology.WithTopologyServerMonitor(func(*event.ServerMonitor) *event.ServerMonitor { return opts.ServerMonitor }),
-		)
-	}
-	// ReadConcern
-	c.readConcern = readconcern.New()
-	if opts.ReadConcern != nil {
-		c.readConcern = opts.ReadConcern
-	}
-	// ReadPreference
-	c.readPreference = readpref.Primary()
-	if opts.ReadPreference != nil {
-		c.readPreference = opts.ReadPreference
-	}
-	// Registry
-	c.registry = bson.DefaultRegistry
-	if opts.Registry != nil {
-		c.registry = opts.Registry
-	}
-	// ReplicaSet
-	if opts.ReplicaSet != nil {
-		topologyOpts = append(topologyOpts, topology.WithReplicaSetName(
-			func(string) string { return *opts.ReplicaSet },
-		))
-	}
-	// RetryWrites
-	c.retryWrites = true // retry writes on by default
-	if opts.RetryWrites != nil {
-		c.retryWrites = *opts.RetryWrites
-	}
-	c.retryReads = true
-	if opts.RetryReads != nil {
-		c.retryReads = *opts.RetryReads
-	}
-	// ServerSelectionTimeout
-	if opts.ServerSelectionTimeout != nil {
-		topologyOpts = append(topologyOpts, topology.WithServerSelectionTimeout(
-			func(time.Duration) time.Duration { return *opts.ServerSelectionTimeout },
-		))
-	}
-	// SocketTimeout
-	if opts.SocketTimeout != nil {
-		connOpts = append(
-			connOpts,
-			topology.WithReadTimeout(func(time.Duration) time.Duration { return *opts.SocketTimeout }),
-			topology.WithWriteTimeout(func(time.Duration) time.Duration { return *opts.SocketTimeout }),
-		)
-	}
-	// TLSConfig
-	if opts.TLSConfig != nil {
-		connOpts = append(connOpts, topology.WithTLSConfig(
-			func(*tls.Config) *tls.Config {
-				return opts.TLSConfig
-			},
-		))
-	}
-	// WriteConcern
-	if opts.WriteConcern != nil {
-		c.writeConcern = opts.WriteConcern
-	}
-	// AutoEncryptionOptions
-	if opts.AutoEncryptionOptions != nil {
-		if err := c.configureAutoEncryption(opts); err != nil {
-			return err
-		}
-	}
-
-	// OCSP cache
-	ocspCache := ocsp.NewCache()
-	connOpts = append(
-		connOpts,
-		topology.WithOCSPCache(func(ocsp.Cache) ocsp.Cache { return ocspCache }),
-	)
-
-	// Disable communication with external OCSP responders.
-	if opts.DisableOCSPEndpointCheck != nil {
-		connOpts = append(
-			connOpts,
-			topology.WithDisableOCSPEndpointCheck(func(bool) bool { return *opts.DisableOCSPEndpointCheck }),
-		)
-	}
-
-	serverOpts = append(
-		serverOpts,
-		topology.WithClock(func(*session.ClusterClock) *session.ClusterClock { return c.clock }),
-		topology.WithConnectionOptions(func(...topology.ConnectionOption) []topology.ConnectionOption { return connOpts }),
-	)
-	c.topologyOptions = append(topologyOpts, topology.WithServerOptions(
-		func(...topology.ServerOption) []topology.ServerOption { return serverOpts },
-	))
-
-	// Deployment
-	if opts.Deployment != nil {
-		// topology options: WithSeedlist and WithURI
-		// server options: WithClock and WithConnectionOptions
-		if len(serverOpts) > 2 || len(topologyOpts) > 2 {
-			return errors.New("cannot specify topology or server options with a deployment")
-		}
-		c.deployment = opts.Deployment
-	}
-
-	return nil
-}
-
 func (c *Client) configureAutoEncryption(clientOpts *options.ClientOptions) error {
+	c.encryptedFieldsMap = clientOpts.AutoEncryptionOptions.EncryptedFieldsMap
 	if err := c.configureKeyVaultClientFLE(clientOpts); err != nil {
 		return err
 	}
 	if err := c.configureMetadataClientFLE(clientOpts); err != nil {
 		return err
 	}
-	if err := c.configureMongocryptdClientFLE(clientOpts.AutoEncryptionOptions); err != nil {
+
+	mc, err := c.newMongoCrypt(clientOpts.AutoEncryptionOptions)
+	if err != nil {
 		return err
 	}
-	return c.configureCryptFLE(clientOpts.AutoEncryptionOptions)
+
+	// If the crypt_shared library was loaded successfully, signal to the mongocryptd client creator
+	// that it can bypass spawning mongocryptd.
+	cryptSharedLibAvailable := mc.CryptSharedLibVersionString() != ""
+	mongocryptdFLE, err := newMongocryptdClient(cryptSharedLibAvailable, clientOpts.AutoEncryptionOptions)
+	if err != nil {
+		return err
+	}
+	c.mongocryptdFLE = mongocryptdFLE
+
+	c.configureCryptFLE(mc, clientOpts.AutoEncryptionOptions)
+	return nil
 }
 
 func (c *Client) getOrCreateInternalClient(clientOpts *options.ClientOptions) (*Client, error) {
@@ -702,32 +510,90 @@ func (c *Client) configureMetadataClientFLE(clientOpts *options.ClientOptions) e
 	return err
 }
 
-func (c *Client) configureMongocryptdClientFLE(opts *options.AutoEncryptionOptions) error {
-	var err error
-	c.mongocryptdFLE, err = newMcryptClient(opts)
-	return err
-}
-
-func (c *Client) configureCryptFLE(opts *options.AutoEncryptionOptions) error {
+func (c *Client) newMongoCrypt(opts *options.AutoEncryptionOptions) (*mongocrypt.MongoCrypt, error) {
 	// convert schemas in SchemaMap to bsoncore documents
 	cryptSchemaMap := make(map[string]bsoncore.Document)
 	for k, v := range opts.SchemaMap {
 		schema, err := transformBsoncoreDocument(c.registry, v, true, "schemaMap")
 		if err != nil {
-			return err
+			return nil, err
 		}
 		cryptSchemaMap[k] = schema
 	}
-	kmsProviders, err := transformBsoncoreDocument(c.registry, opts.KmsProviders, true, "kmsProviders")
-	if err != nil {
-		return fmt.Errorf("error creating KMS providers document: %v", err)
+
+	// convert schemas in EncryptedFieldsMap to bsoncore documents
+	cryptEncryptedFieldsMap := make(map[string]bsoncore.Document)
+	for k, v := range opts.EncryptedFieldsMap {
+		encryptedFields, err := transformBsoncoreDocument(c.registry, v, true, "encryptedFieldsMap")
+		if err != nil {
+			return nil, err
+		}
+		cryptEncryptedFieldsMap[k] = encryptedFields
 	}
 
-	// configure options
-	var bypass bool
-	if opts.BypassAutoEncryption != nil {
-		bypass = *opts.BypassAutoEncryption
+	kmsProviders, err := transformBsoncoreDocument(c.registry, opts.KmsProviders, true, "kmsProviders")
+	if err != nil {
+		return nil, fmt.Errorf("error creating KMS providers document: %v", err)
 	}
+
+	// Set the crypt_shared library override path from the "cryptSharedLibPath" extra option if one
+	// was set.
+	cryptSharedLibPath := ""
+	if val, ok := opts.ExtraOptions["cryptSharedLibPath"]; ok {
+		str, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				`expected AutoEncryption extra option "cryptSharedLibPath" to be a string, but is a %T`, val)
+		}
+		cryptSharedLibPath = str
+	}
+
+	// Explicitly disable loading the crypt_shared library if requested. Note that this is ONLY
+	// intended for use from tests; there is no supported public API for explicitly disabling
+	// loading the crypt_shared library.
+	cryptSharedLibDisabled := false
+	if v, ok := opts.ExtraOptions["__cryptSharedLibDisabledForTestOnly"]; ok {
+		cryptSharedLibDisabled = v.(bool)
+	}
+
+	bypassAutoEncryption := opts.BypassAutoEncryption != nil && *opts.BypassAutoEncryption
+	bypassQueryAnalysis := opts.BypassQueryAnalysis != nil && *opts.BypassQueryAnalysis
+
+	mc, err := mongocrypt.NewMongoCrypt(mcopts.MongoCrypt().
+		SetKmsProviders(kmsProviders).
+		SetLocalSchemaMap(cryptSchemaMap).
+		SetBypassQueryAnalysis(bypassQueryAnalysis).
+		SetEncryptedFieldsMap(cryptEncryptedFieldsMap).
+		SetCryptSharedLibDisabled(cryptSharedLibDisabled || bypassAutoEncryption).
+		SetCryptSharedLibOverridePath(cryptSharedLibPath))
+	if err != nil {
+		return nil, err
+	}
+
+	var cryptSharedLibRequired bool
+	if val, ok := opts.ExtraOptions["cryptSharedLibRequired"]; ok {
+		b, ok := val.(bool)
+		if !ok {
+			return nil, fmt.Errorf(
+				`expected AutoEncryption extra option "cryptSharedLibRequired" to be a bool, but is a %T`, val)
+		}
+		cryptSharedLibRequired = b
+	}
+
+	// If the "cryptSharedLibRequired" extra option is set to true, check the MongoCrypt version
+	// string to confirm that the library was successfully loaded. If the version string is empty,
+	// return an error indicating that we couldn't load the crypt_shared library.
+	if cryptSharedLibRequired && mc.CryptSharedLibVersionString() == "" {
+		return nil, errors.New(
+			`AutoEncryption extra option "cryptSharedLibRequired" is true, but we failed to load the crypt_shared library`)
+	}
+
+	return mc, nil
+}
+
+//nolint:unused // the unused linter thinks that this function is unreachable because "c.newMongoCrypt" always panics without the "cse" build tag set.
+func (c *Client) configureCryptFLE(mc *mongocrypt.MongoCrypt, opts *options.AutoEncryptionOptions) {
+	bypass := opts.BypassAutoEncryption != nil && *opts.BypassAutoEncryption
 	kr := keyRetriever{coll: c.keyVaultCollFLE}
 	var cir collInfoRetriever
 	// If bypass is true, c.metadataClientFLE is nil and the collInfoRetriever
@@ -736,22 +602,21 @@ func (c *Client) configureCryptFLE(opts *options.AutoEncryptionOptions) error {
 	if !bypass {
 		cir = collInfoRetriever{client: c.metadataClientFLE}
 	}
-	cryptOpts := &driver.CryptOptions{
+
+	c.cryptFLE = driver.NewCrypt(&driver.CryptOptions{
+		MongoCrypt:           mc,
 		CollInfoFn:           cir.cryptCollInfo,
 		KeyFn:                kr.cryptKeys,
 		MarkFn:               c.mongocryptdFLE.markCommand,
-		KmsProviders:         kmsProviders,
+		TLSConfig:            opts.TLSConfig,
+		HTTPClient:           opts.HTTPClient,
 		BypassAutoEncryption: bypass,
-		SchemaMap:            cryptSchemaMap,
-	}
-
-	c.cryptFLE, err = driver.NewCrypt(cryptOpts)
-	return err
+	})
 }
 
 // validSession returns an error if the session doesn't belong to the client
 func (c *Client) validSession(sess *session.Client) error {
-	if sess != nil && !uuid.Equal(sess.ClientID, c.id) {
+	if sess != nil && sess.ClientID != c.id {
 		return ErrWrongClient
 	}
 	return nil
@@ -768,9 +633,9 @@ func (c *Client) Database(name string, opts ...*options.DatabaseOptions) *Databa
 // databases are included in the result. It cannot be nil. An empty document (e.g. bson.D{}) should be used to include
 // all databases.
 //
-// The opts paramter can be used to specify options for this operation (see the options.ListDatabasesOptions documentation).
+// The opts parameter can be used to specify options for this operation (see the options.ListDatabasesOptions documentation).
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/listDatabases/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/listDatabases/.
 func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...*options.ListDatabasesOptions) (ListDatabasesResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -779,6 +644,9 @@ func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...
 	sess := sessionFromContext(ctx)
 
 	err := c.validSession(sess)
+	if err != nil {
+		return ListDatabasesResult{}, err
+	}
 	if sess == nil && c.sessionPool != nil {
 		sess, err = session.NewClientSession(c.sessionPool, c.id, session.Implicit)
 		if err != nil {
@@ -806,7 +674,8 @@ func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...
 	ldo := options.MergeListDatabasesOptions(opts...)
 	op := operation.NewListDatabases(filterDoc).
 		Session(sess).ReadPreference(c.readPreference).CommandMonitor(c.monitor).
-		ServerSelector(selector).ClusterClock(c.clock).Database("admin").Deployment(c.deployment).Crypt(c.cryptFLE)
+		ServerSelector(selector).ClusterClock(c.clock).Database("admin").Deployment(c.deployment).Crypt(c.cryptFLE).
+		ServerAPI(c.serverAPI).Timeout(c.timeout)
 
 	if ldo.NameOnly != nil {
 		op = op.NameOnly(*ldo.NameOnly)
@@ -839,7 +708,7 @@ func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...
 // The opts parameter can be used to specify options for this operation (see the options.ListDatabasesOptions
 // documentation.)
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/listDatabases/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/listDatabases/.
 func (c *Client) ListDatabaseNames(ctx context.Context, filter interface{}, opts ...*options.ListDatabasesOptions) ([]string, error) {
 	opts = append(opts, options.ListDatabases().SetNameOnly(true))
 
@@ -860,6 +729,9 @@ func (c *Client) ListDatabaseNames(ctx context.Context, filter interface{}, opts
 // SessionContext must be used as the Context parameter for any operations in the fn callback that should be executed
 // under the session.
 //
+// WithSession is safe to call from multiple goroutines concurrently. However, the SessionContext passed to the
+// WithSession callback function is not safe for concurrent use by multiple goroutines.
+//
 // If the ctx parameter already contains a Session, that Session will be replaced with the one provided.
 //
 // Any error returned by the fn callback will be returned without any modifications.
@@ -872,6 +744,9 @@ func WithSession(ctx context.Context, sess Session, fn func(SessionContext) erro
 // be executed under a session. After the callback returns, the created Session is ended, meaning that any in-progress
 // transactions started by fn will be aborted even if fn returns an error.
 //
+// UseSession is safe to call from multiple goroutines concurrently. However, the SessionContext passed to the
+// UseSession callback function is not safe for concurrent use by multiple goroutines.
+//
 // If the ctx parameter already contains a Session, that Session will be replaced with the newly created one.
 //
 // Any error returned by the fn callback will be returned without any modifications.
@@ -880,6 +755,9 @@ func (c *Client) UseSession(ctx context.Context, fn func(SessionContext) error) 
 }
 
 // UseSessionWithOptions operates like UseSession but uses the given SessionOptions to create the Session.
+//
+// UseSessionWithOptions is safe to call from multiple goroutines concurrently. However, the SessionContext passed to
+// the UseSessionWithOptions callback function is not safe for concurrent use by multiple goroutines.
 func (c *Client) UseSessionWithOptions(ctx context.Context, opts *options.SessionOptions, fn func(SessionContext) error) error {
 	defaultSess, err := c.StartSession(opts)
 	if err != nil {
@@ -891,13 +769,13 @@ func (c *Client) UseSessionWithOptions(ctx context.Context, opts *options.Sessio
 }
 
 // Watch returns a change stream for all changes on the deployment. See
-// https://docs.mongodb.com/manual/changeStreams/ for more information about change streams.
+// https://www.mongodb.com/docs/manual/changeStreams/ for more information about change streams.
 //
 // The client must be configured with read concern majority or no read concern for a change stream to be created
 // successfully.
 //
 // The pipeline parameter must be an array of documents, each representing a pipeline stage. The pipeline cannot be
-// nil or empty. The stage documents must all be non-nil. See https://docs.mongodb.com/manual/changeStreams/ for a list
+// nil or empty. The stage documents must all be non-nil. See https://www.mongodb.com/docs/manual/changeStreams/ for a list
 // of pipeline stages that can be used with change streams. For a pipeline of bson.D documents, the mongo.Pipeline{}
 // type can be used.
 //
@@ -924,5 +802,21 @@ func (c *Client) Watch(ctx context.Context, pipeline interface{},
 // NumberSessionsInProgress returns the number of sessions that have been started for this client but have not been
 // closed (i.e. EndSession has not been called).
 func (c *Client) NumberSessionsInProgress() int {
-	return c.sessionPool.CheckedOut()
+	// The underlying session pool uses an int64 for checkedOut to allow atomic
+	// access. We convert to an int here to maintain backward compatibility with
+	// older versions of the driver that did not atomically access checkedOut.
+	return int(c.sessionPool.CheckedOut())
+}
+
+// Timeout returns the timeout set for this client.
+func (c *Client) Timeout() *time.Duration {
+	return c.timeout
+}
+
+func (c *Client) createBaseCursorOptions() driver.CursorOptions {
+	return driver.CursorOptions{
+		CommandMonitor: c.monitor,
+		Crypt:          c.cryptFLE,
+		ServerAPI:      c.serverAPI,
+	}
 }

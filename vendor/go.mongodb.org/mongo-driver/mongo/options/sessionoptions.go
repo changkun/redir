@@ -19,8 +19,9 @@ var DefaultCausalConsistency = true
 
 // SessionOptions represents options that can be used to configure a Session.
 type SessionOptions struct {
-	// If true, causal consistency will be enabled for the session. The default value is true. See
-	// https://docs.mongodb.com/manual/core/read-isolation-consistency-recency/#sessions for more information.
+	// If true, causal consistency will be enabled for the session. This option cannot be set to true if Snapshot is
+	// set to true. The default value is true unless Snapshot is set to true. See
+	// https://www.mongodb.com/docs/manual/core/read-isolation-consistency-recency/#sessions for more information.
 	CausalConsistency *bool
 
 	// The default read concern for transactions started in the session. The default value is nil, which means that
@@ -37,14 +38,21 @@ type SessionOptions struct {
 
 	// The default maximum amount of time that a CommitTransaction operation executed in the session can run on the
 	// server. The default value is nil, which means that that there is no time limit for execution.
+	//
+	// NOTE(benjirewis): DefaultMaxCommitTime will be deprecated in a future release. The more general Timeout option
+	// may be used in its place to control the amount of time that a single operation can run before returning an
+	// error. DefaultMaxCommitTime is ignored if Timeout is set on the client.
 	DefaultMaxCommitTime *time.Duration
+
+	// If true, all read operations performed with this session will be read from the same snapshot. This option cannot
+	// be set to true if CausalConsistency is set to true. Transactions and write operations are not allowed on
+	// snapshot sessions and will error. The default value is false.
+	Snapshot *bool
 }
 
 // Session creates a new SessionOptions instance.
 func Session() *SessionOptions {
-	return &SessionOptions{
-		CausalConsistency: &DefaultCausalConsistency,
-	}
+	return &SessionOptions{}
 }
 
 // SetCausalConsistency sets the value for the CausalConsistency field.
@@ -72,8 +80,19 @@ func (s *SessionOptions) SetDefaultWriteConcern(wc *writeconcern.WriteConcern) *
 }
 
 // SetDefaultMaxCommitTime sets the value for the DefaultMaxCommitTime field.
+//
+// NOTE(benjirewis): DefaultMaxCommitTime will be deprecated in a future release. The more
+// general Timeout option may be used in its place to control the amount of time that a
+// single operation can run before returning an error. DefaultMaxCommitTime is ignored if
+// Timeout is set on the client.
 func (s *SessionOptions) SetDefaultMaxCommitTime(mct *time.Duration) *SessionOptions {
 	s.DefaultMaxCommitTime = mct
+	return s
+}
+
+// SetSnapshot sets the value for the Snapshot field.
+func (s *SessionOptions) SetSnapshot(b bool) *SessionOptions {
+	s.Snapshot = &b
 	return s
 }
 
@@ -100,6 +119,12 @@ func MergeSessionOptions(opts ...*SessionOptions) *SessionOptions {
 		if opt.DefaultMaxCommitTime != nil {
 			s.DefaultMaxCommitTime = opt.DefaultMaxCommitTime
 		}
+		if opt.Snapshot != nil {
+			s.Snapshot = opt.Snapshot
+		}
+	}
+	if s.CausalConsistency == nil && (s.Snapshot == nil || !*s.Snapshot) {
+		s.CausalConsistency = &DefaultCausalConsistency
 	}
 
 	return s

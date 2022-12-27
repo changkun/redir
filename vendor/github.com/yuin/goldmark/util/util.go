@@ -180,6 +180,59 @@ func IndentPositionPadding(bs []byte, currentPos, paddingv, width int) (pos, pad
 	return -1, -1
 }
 
+// DedentPosition dedents lines by the given width.
+//
+// Deprecated: This function has bugs. Use util.IndentPositionPadding and util.FirstNonSpacePosition.
+func DedentPosition(bs []byte, currentPos, width int) (pos, padding int) {
+	if width == 0 {
+		return 0, 0
+	}
+	w := 0
+	l := len(bs)
+	i := 0
+	for ; i < l; i++ {
+		if bs[i] == '\t' {
+			w += TabWidth(currentPos + w)
+		} else if bs[i] == ' ' {
+			w++
+		} else {
+			break
+		}
+	}
+	if w >= width {
+		return i, w - width
+	}
+	return i, 0
+}
+
+// DedentPositionPadding dedents lines by the given width.
+// This function is mostly same as DedentPosition except this function
+// takes account into additional paddings.
+//
+// Deprecated: This function has bugs. Use util.IndentPositionPadding and util.FirstNonSpacePosition.
+func DedentPositionPadding(bs []byte, currentPos, paddingv, width int) (pos, padding int) {
+	if width == 0 {
+		return 0, paddingv
+	}
+
+	w := 0
+	i := 0
+	l := len(bs)
+	for ; i < l; i++ {
+		if bs[i] == '\t' {
+			w += TabWidth(currentPos + w)
+		} else if bs[i] == ' ' {
+			w++
+		} else {
+			break
+		}
+	}
+	if w >= width {
+		return i - paddingv, w - width
+	}
+	return i - paddingv, 0
+}
+
 // IndentWidth calculate an indent width for the given line.
 func IndentWidth(bs []byte, currentPos int) (width, pos int) {
 	l := len(bs)
@@ -779,6 +832,15 @@ func IsHexDecimal(c byte) bool {
 // IsAlphaNumeric returns true if the given character is a alphabet or a numeric, otherwise false.
 func IsAlphaNumeric(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// IsEastAsianWideRune returns trhe if the given rune is an east asian wide character, otherwise false.
+func IsEastAsianWideRune(r rune) bool {
+	return unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Lm, r) ||
+		unicode.Is(unicode.Hangul, r)
 }
 
 // A BufWriter is a subset of the bufio.Writer .

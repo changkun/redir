@@ -35,6 +35,10 @@ func (c *changeStreamDeployment) Connection(context.Context) (driver.Connection,
 	return c.conn, nil
 }
 
+func (c *changeStreamDeployment) RTTMonitor() driver.RTTMonitor {
+	return c.server.RTTMonitor()
+}
+
 func (c *changeStreamDeployment) ProcessError(err error, conn driver.Connection) driver.ProcessErrorResult {
 	ep, ok := c.server.(driver.ErrorProcessor)
 	if !ok {

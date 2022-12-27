@@ -20,11 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/signer/v4"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/auth/internal/awsv4"
 )
 
 type clientState int
@@ -37,12 +36,13 @@ const (
 )
 
 type awsConversation struct {
-	state    clientState
-	valid    bool
-	nonce    []byte
-	username string
-	password string
-	token    string
+	state      clientState
+	valid      bool
+	nonce      []byte
+	username   string
+	password   string
+	token      string
+	httpClient *http.Client
 }
 
 type serverMessage struct {
@@ -77,7 +77,7 @@ func (ac *awsConversation) Step(challenge []byte) (response []byte, err error) {
 	switch ac.state {
 	case clientStarting:
 		ac.state = clientFirst
-		response, err = ac.firstMsg()
+		response = ac.firstMsg()
 	case clientFirst:
 		ac.state = clientFinal
 		response, err = ac.finalMsg(challenge)
@@ -128,7 +128,7 @@ func getRegion(host string) (string, error) {
 	return region, nil
 }
 
-func (ac *awsConversation) validateAndMakeCredentials() (*credentials.Credentials, error) {
+func (ac *awsConversation) validateAndMakeCredentials() (*awsv4.StaticProvider, error) {
 	if ac.username != "" && ac.password == "" {
 		return nil, errors.New("ACCESS_KEY_ID is set, but SECRET_ACCESS_KEY is missing")
 	}
@@ -139,24 +139,28 @@ func (ac *awsConversation) validateAndMakeCredentials() (*credentials.Credential
 		return nil, errors.New("AWS_SESSION_TOKEN is set, but ACCESS_KEY_ID and SECRET_ACCESS_KEY are missing")
 	}
 	if ac.username != "" || ac.password != "" || ac.token != "" {
-		return credentials.NewStaticCredentials(ac.username, ac.password, ac.token), nil
+		return &awsv4.StaticProvider{Value: awsv4.Value{
+			AccessKeyID:     ac.username,
+			SecretAccessKey: ac.password,
+			SessionToken:    ac.token,
+		}}, nil
 	}
 	return nil, nil
 }
 
-func executeAWSHTTPRequest(req *http.Request) ([]byte, error) {
+func executeAWSHTTPRequest(httpClient *http.Client, req *http.Request) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultHTTPTimeout)
 	defer cancel()
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	resp, err := httpClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
 }
 
-func (ac *awsConversation) getEC2Credentials() (*credentials.Credentials, error) {
+func (ac *awsConversation) getEC2Credentials() (*awsv4.StaticProvider, error) {
 	// get token
 	req, err := http.NewRequest("PUT", awsEC2URI+awsEC2TokenPath, nil)
 	if err != nil {
@@ -164,7 +168,7 @@ func (ac *awsConversation) getEC2Credentials() (*credentials.Credentials, error)
 	}
 	req.Header.Set("X-aws-ec2-metadata-token-ttl-seconds", "30")
 
-	token, err := executeAWSHTTPRequest(req)
+	token, err := executeAWSHTTPRequest(ac.httpClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +184,7 @@ func (ac *awsConversation) getEC2Credentials() (*credentials.Credentials, error)
 	}
 	req.Header.Set("X-aws-ec2-metadata-token", tokenStr)
 
-	role, err := executeAWSHTTPRequest(req)
+	role, err := executeAWSHTTPRequest(ac.httpClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +199,7 @@ func (ac *awsConversation) getEC2Credentials() (*credentials.Credentials, error)
 		return nil, err
 	}
 	req.Header.Set("X-aws-ec2-metadata-token", tokenStr)
-	creds, err := executeAWSHTTPRequest(req)
+	creds, err := executeAWSHTTPRequest(ac.httpClient, req)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +216,7 @@ func (ac *awsConversation) getEC2Credentials() (*credentials.Credentials, error)
 	return ac.validateAndMakeCredentials()
 }
 
-func (ac *awsConversation) getCredentials() (*credentials.Credentials, error) {
+func (ac *awsConversation) getCredentials() (*awsv4.StaticProvider, error) {
 	// Credentials passed through URI
 	creds, err := ac.validateAndMakeCredentials()
 	if creds != nil || err != nil {
@@ -239,7 +243,7 @@ func (ac *awsConversation) getCredentials() (*credentials.Credentials, error) {
 			return nil, err
 		}
 
-		body, err := executeAWSHTTPRequest(req)
+		body, err := executeAWSHTTPRequest(ac.httpClient, req)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +271,7 @@ func (ac *awsConversation) getCredentials() (*credentials.Credentials, error) {
 	return creds, err
 }
 
-func (ac *awsConversation) firstMsg() ([]byte, error) {
+func (ac *awsConversation) firstMsg() []byte {
 	// Values are cached for use in final message parameters
 	ac.nonce = make([]byte, 32)
 	_, _ = rand.Read(ac.nonce)
@@ -276,7 +280,7 @@ func (ac *awsConversation) firstMsg() ([]byte, error) {
 	msg = bsoncore.AppendInt32Element(msg, "p", 110)
 	msg = bsoncore.AppendBinaryElement(msg, "r", 0x00, ac.nonce)
 	msg, _ = bsoncore.AppendDocumentEnd(msg, idx)
-	return msg, nil
+	return msg
 }
 
 func (ac *awsConversation) finalMsg(s1 []byte) ([]byte, error) {
@@ -323,9 +327,7 @@ func (ac *awsConversation) finalMsg(s1 []byte) ([]byte, error) {
 	req.Header.Set("X-MongoDB-GS2-CB-Flag", "n")
 
 	// Create signer with credentials
-	signer := v4.Signer{
-		Credentials: creds,
-	}
+	signer := awsv4.NewSigner(creds)
 
 	// Get signed header
 	_, err = signer.Sign(req, strings.NewReader(body), "sts", region, currentTime)

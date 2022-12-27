@@ -10,6 +10,10 @@ package options
 type DataKeyOptions struct {
 	MasterKey   interface{}
 	KeyAltNames []string
+
+	// KeyMaterial is used to encrypt data. If omitted, keyMaterial is generated form a cryptographically secure random
+	// source. "Key Material" is used interchangeably with "dataKey" and "Data Encryption Key" (DEK).
+	KeyMaterial []byte
 }
 
 // DataKey creates a new DataKeyOptions instance.
@@ -25,30 +29,36 @@ func DataKey() *DataKeyOptions {
 // "endpoint" or "keyVaultEndpoint" must be a host name with an optional port number (e.g. "foo.com" or "foo.com:443").
 //
 // When using AWS, the document must have the format:
-// {
-//   region: <string>,
-//   key: <string>,             // The Amazon Resource Name (ARN) to the AWS customer master key (CMK).
-//   endpoint: Optional<string> // An alternate host identifier to send KMS requests to.
-// }
+//
+//	{
+//	  region: <string>,
+//	  key: <string>,             // The Amazon Resource Name (ARN) to the AWS customer master key (CMK).
+//	  endpoint: Optional<string> // An alternate host identifier to send KMS requests to.
+//	}
+//
 // If unset, the "endpoint" defaults to "kms.<region>.amazonaws.com".
 //
 // When using Azure, the document must have the format:
-// {
-//   keyVaultEndpoint: <string>,  // A host identifier to send KMS requests to.
-//   keyName: <string>,
-//   keyVersion: Optional<string> // A specific version of the named key.
-// }
+//
+//	{
+//	  keyVaultEndpoint: <string>,  // A host identifier to send KMS requests to.
+//	  keyName: <string>,
+//	  keyVersion: Optional<string> // A specific version of the named key.
+//	}
+//
 // If unset, "keyVersion" defaults to the key's primary version.
 //
 // When using GCP, the document must have the format:
-// {
-//   projectId: <string>,
-//   location: <string>,
-//   keyRing: <string>,
-//   keyName: <string>,
-//   keyVersion: Optional<string>, // A specific version of the named key.
-//   endpoint: Optional<string>    // An alternate host identifier to send KMS requests to.
-// }
+//
+//	{
+//	  projectId: <string>,
+//	  location: <string>,
+//	  keyRing: <string>,
+//	  keyName: <string>,
+//	  keyVersion: Optional<string>, // A specific version of the named key.
+//	  endpoint: Optional<string>    // An alternate host identifier to send KMS requests to.
+//	}
+//
 // If unset, "keyVersion" defaults to the key's primary version and "endpoint" defaults to "cloudkms.googleapis.com".
 func (dk *DataKeyOptions) SetMasterKey(masterKey interface{}) *DataKeyOptions {
 	dk.MasterKey = masterKey
@@ -59,6 +69,12 @@ func (dk *DataKeyOptions) SetMasterKey(masterKey interface{}) *DataKeyOptions {
 // with alternate names, encryption may refer to the key by a unique alternate name instead of by _id.
 func (dk *DataKeyOptions) SetKeyAltNames(keyAltNames []string) *DataKeyOptions {
 	dk.KeyAltNames = keyAltNames
+	return dk
+}
+
+// SetKeyMaterial will set a custom keyMaterial to DataKeyOptions which can be used to encrypt data.
+func (dk *DataKeyOptions) SetKeyMaterial(keyMaterial []byte) *DataKeyOptions {
+	dk.KeyMaterial = keyMaterial
 	return dk
 }
 
@@ -75,6 +91,9 @@ func MergeDataKeyOptions(opts ...*DataKeyOptions) *DataKeyOptions {
 		}
 		if opt.KeyAltNames != nil {
 			dko.KeyAltNames = opt.KeyAltNames
+		}
+		if opt.KeyMaterial != nil {
+			dko.KeyMaterial = opt.KeyMaterial
 		}
 	}
 
