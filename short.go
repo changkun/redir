@@ -50,7 +50,7 @@ func (s *server) sHandler() http.Handler {
 		default:
 			err := fmt.Errorf("%s is not supported", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
+			_, _ = w.Write([]byte(err.Error()))
 		}
 	})
 }
@@ -75,7 +75,7 @@ func (s *server) sHandlerPost(w http.ResponseWriter, r *http.Request) {
 			b, _ := json.Marshal(shortOutput{
 				Message: err.Error(),
 			})
-			w.Write(b)
+			_, _ = w.Write(b)
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}()
@@ -225,7 +225,8 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 	// If this is a page that refers to a PDF, we prefer serve it as a PDF
 	// content directly rather than redirect.
 	if strings.HasSuffix(red.URL, ".pdf") {
-		resp, err := http.Get(red.URL)
+		var resp *http.Response
+		resp, err = http.Get(red.URL)
 		if err != nil {
 			return
 		}
@@ -530,7 +531,7 @@ func (s *server) indexData(
 		return err
 	}
 
-	w.Write(b)
+	_, _ = w.Write(b)
 	return nil
 }
 
@@ -596,7 +597,7 @@ func (s *server) statData(
 		retErr = err
 		return
 	}
-	w.Write(b)
+	_, _ = w.Write(b)
 	return
 }
 
