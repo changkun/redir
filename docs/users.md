@@ -15,7 +15,7 @@ The current known users:
 - changkun.de
 - golang.design
 - qcrao.com
-- gonewspaper.org
+- ...
 
 
 ## License
