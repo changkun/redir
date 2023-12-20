@@ -72,9 +72,7 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 		// into concurrent inconsistent issue. But for small scale
 		// use, it is fine for now.
 		rr, err = s.FetchAlias(ctx, a)
-		if err != nil {
-			err = nil
-		} else {
+		if err == nil {
 			// use old values if not presents
 			if r.URL == "" {
 				r.URL = rr.URL
