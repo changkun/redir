@@ -18,7 +18,7 @@ services:
   mongo:
     restart: always
     container_name: redirdb
-    image: mongo:latest
+    image: mongo:4.4
     mem_limit: 512m
     memswap_limit: 1g
     ports:
