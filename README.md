@@ -56,7 +56,15 @@ $ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -tr
 You can configure redir using a configuration file.
 The [default configuration](./internal/config/config.yml) is embedded into the binary.
 
-Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
+Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration. When `REDIR_CONF` names a file that cannot be read, the server stops rather than falling back to the default, so a deployment cannot come up quietly pointed at the wrong database.
+
+A deployment keeps its own configuration in `data/redirconf.yml`, which is
+not tracked and is mounted into the container rather than built into the
+image, because it holds credentials. Start one by copying the default:
+
+```sh
+$ mkdir -p data && cp internal/config/config.yml data/redirconf.yml
+```
 
 ## Login
 

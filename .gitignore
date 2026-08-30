@@ -21,3 +21,4 @@ build
 vendor
 coverage.txt
 .env
+data/redirconf.yml

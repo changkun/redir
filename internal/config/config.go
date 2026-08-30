@@ -78,16 +78,23 @@ type config struct {
 var defaultConf []byte
 
 func (c *config) parse() {
-	f := os.Getenv("REDIR_CONF")
-	d, err := os.ReadFile(f)
-	if err != nil {
-		// Just try again with default setting.
-		d = defaultConf
-		if d == nil {
-			log.Fatalf("cannot read configuration: %v\n", err)
+	// An unset REDIR_CONF means "run on the built-in defaults". A set one
+	// names a file the operator expects to be used, so failing to read it
+	// is an error: falling back would quietly serve the sample config,
+	// which points at another database and re-enables the sample
+	// credentials.
+	d := defaultConf
+	if f := os.Getenv("REDIR_CONF"); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			log.Fatalf("cannot read REDIR_CONF %v: %v\n", f, err)
 		}
+		d = b
 	}
-	err = yaml.Unmarshal(d, c)
+	if d == nil {
+		log.Fatalln("no configuration to read")
+	}
+	err := yaml.Unmarshal(d, c)
 	if err != nil {
 		log.Fatalf("cannot parse configuration: %v\n", err)
 	}

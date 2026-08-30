@@ -8,6 +8,11 @@ services:
     image: redir:latest
     environment:
       REDIR_CONF: ./data/redirconf.yml
+    volumes:
+      # The deployment config stays on the host: it holds credentials and
+      # it outlives any image. Only this file, not the whole data
+      # directory, which also holds the database.
+      - ../data/redirconf.yml:/app/data/redirconf.yml:ro
     # Login credentials for auth.latere.ai. Optional so a deployment using
     # basic auth needs no .env file. See .env.template.
     env_file:

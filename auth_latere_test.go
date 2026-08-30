@@ -167,13 +167,13 @@ func mustQuery(t *testing.T, raw string) url.Values {
 	return u.Query()
 }
 
-// TestHandleAuthUnknownModeRefuses covers a stale or mistyped auth.enable,
-// such as the "sso" this migration replaced. Administration must fail
-// closed rather than quietly fall through to a different login. Public
-// redirects do not go through handleAuth and keep working.
+// TestHandleAuthUnknownModeRefuses covers a stale or mistyped auth.enable.
+// Administration must fail closed rather than quietly fall through to a
+// different login. Public redirects do not go through handleAuth and keep
+// working.
 func TestHandleAuthUnknownModeRefuses(t *testing.T) {
 	prev := config.Conf.Auth.Enable
-	config.Conf.Auth.Enable = "sso"
+	config.Conf.Auth.Enable = "no-such-mode"
 	t.Cleanup(func() { config.Conf.Auth.Enable = prev })
 
 	s := &server{}

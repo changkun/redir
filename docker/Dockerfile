@@ -27,13 +27,12 @@ RUN echo "$VERSION" > internal/version/.version && \
     CGO_ENABLED=0 go build -o /redir
 
 FROM alpine:3.22
-# The SSO login path makes outbound TLS calls, which need a trust store.
+# Signing in calls the auth service over TLS, which needs a trust store.
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=server /redir ./redir
-# REDIR_CONF resolves inside this directory. If the file is missing the
-# server falls back to the embedded default config without failing, so a
-# deployment would come up silently misconfigured.
-COPY data ./data
+# The deployment config is mounted at /app/data/redirconf.yml rather than
+# copied in: it holds credentials, and baking it in would put them in
+# every layer of a shared image. See docker-compose.yml.
 EXPOSE 80
 CMD ["/app/redir", "-s"]
