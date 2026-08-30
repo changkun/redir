@@ -14,11 +14,10 @@
 redir
 migrate/dump/ips
 migrate/dump/alias
-data/mongo
 node_modules
 build
 .DS_Store
 vendor
 coverage.txt
 .env
-data/redirconf.yml
+data/
