@@ -15,7 +15,10 @@ import (
 
 const kalias = "alias"
 
-func prepare(ctx context.Context, t *testing.T) *db.Store {
+// prepare opens the store and seeds a single public alias, removing it
+// again when the test ends, so every test starts from a known state
+// rather than from whatever the local database happens to hold.
+func prepare(ctx context.Context, t testing.TB) *db.Store {
 	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
 	if err != nil {
 		t.Skip("cannot connect to data store")
@@ -77,10 +80,8 @@ type indexOutput struct {
 
 func TestFetchAliasAll(t *testing.T) {
 	ctx := context.Background()
-	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
-	if err != nil {
-		t.Skip("cannot connect to data store")
-	}
+	s := prepare(ctx, t) // seeds one public alias and removes it afterwards
+
 	rs, total, err := s.FetchAliasAll(ctx, true, 20, 1)
 	if err != nil || len(rs) == 0 || total == 0 {
 		t.Fatalf("fetch failed: %v, %v, %v", err, rs, total)
@@ -98,14 +99,10 @@ func TestFetchAliasAll(t *testing.T) {
 
 func BenchmarkFetchAliasAll(b *testing.B) {
 	ctx := context.Background()
-	s, err := db.NewStore(ctx, "mongodb://0.0.0.0:27018")
-	if err != nil {
-		b.Skip("cannot connect to data store")
-	}
+	s := prepare(ctx, b) // seeds one alias and removes it afterwards
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rs, total, err := s.FetchAliasAll(ctx, false, 100, 1)
 		if err != nil || len(rs) == 0 || total == 0 {
 			b.Fatalf("fetch failed: %v, %v, %v", err, rs, total)
