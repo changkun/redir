@@ -53,21 +53,24 @@ func (l *LRU) Flush() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	for e := l.elems.Front(); e != nil; e = e.Next() {
-		l.elems.Remove(e)
-	}
+	// Init rather than a walk with Remove: Remove clears the element's
+	// next pointer, so walking and removing together stops after the
+	// first element and leaves the rest reachable through Get.
+	l.elems.Init()
 	l.size = 0
 }
 
 func (l *LRU) Len() uint {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return l.size
 }
 
+// Get returns the cached redirect for k and promotes it to the front.
+// The promotion writes to the list, so this takes the write lock.
 func (l *LRU) Get(k string) (*models.Redir, bool) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {

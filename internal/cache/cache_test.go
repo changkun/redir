@@ -7,6 +7,7 @@ package cache
 import (
 	"math/rand/v2"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -180,4 +181,52 @@ func BenchmarkLRU(b *testing.B) {
 			}
 		})
 	})
+}
+
+// TestLRUFlush guards against Flush walking the list while removing from
+// it. container/list clears the removed element's next pointer, so such a
+// walk stops after one element and leaves the rest reachable through Get
+// even though Len reports an empty cache.
+func TestLRUFlush(t *testing.T) {
+	l := NewLRU(false)
+	keys := []string{"a", "b", "c"}
+	for _, k := range keys {
+		l.Put(k, &models.Redir{Alias: k, ValidFrom: time.Now()})
+	}
+
+	l.Flush()
+
+	for _, k := range keys {
+		if _, ok := l.Get(k); ok {
+			t.Errorf("Get(%q) hits after Flush, want a miss", k)
+		}
+	}
+	if got := l.elems.Len(); got != 0 {
+		t.Errorf("list holds %v elements after Flush, want 0", got)
+	}
+	if got := l.Len(); got != 0 {
+		t.Errorf("Len() = %v after Flush, want 0", got)
+	}
+}
+
+// TestLRUGetConcurrent detects Get mutating the list under a read lock.
+// It only reports under -race, which CI runs.
+func TestLRUGetConcurrent(t *testing.T) {
+	l := NewLRU(false)
+	for _, k := range []string{"a", "b"} {
+		l.Put(k, &models.Redir{Alias: k, ValidFrom: time.Now()})
+	}
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 200 {
+				l.Get("a")
+				l.Get("b")
+			}
+		}()
+	}
+	wg.Wait()
 }
