@@ -24,6 +24,7 @@ services:
       replicas: 1
     networks:
       - traefik_proxy
+      - postgres_internal
   mongo:
     restart: always
     container_name: redirdb
@@ -38,4 +39,8 @@ services:
       - traefik_proxy
 networks:
   traefik_proxy:
+    external: true
+  # Owned by changkun/proxy, which runs the shared database instance the
+  # store is migrating onto. See specs/001-shared-postgres.md.
+  postgres_internal:
     external: true
