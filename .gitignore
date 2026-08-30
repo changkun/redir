@@ -17,3 +17,4 @@ migrate/dump/alias
 data/mongo
 node_modules
 build
+.DS_Store
