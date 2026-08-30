@@ -13,7 +13,7 @@ of them has a single possible cause.
 
 | Spec | Status | Deliverable |
 | --- | --- | --- |
-| [001-shared-postgres.md](001-shared-postgres.md) | Drafted | Extract the PostgreSQL instance out of the urlstat compose project into shared infrastructure both services use as equal clients |
+| [001-shared-postgres.md](001-shared-postgres.md) | Complete | Extract the PostgreSQL instance out of the urlstat compose project into shared infrastructure both services use as equal clients |
 | 002-postgres-store.md | Planned | Replace the MongoDB store with PostgreSQL, enriching the data model at write time and copying the data across while MongoDB stays untouched |
 | 003-unify-golang-design.md | Planned | Fold the diverged golang.design/redir deployment into this codebase as a second host and retire its service |
 
@@ -25,7 +25,7 @@ of them has a single possible cause.
 
 | Spec | State |
 | --- | --- |
-| 001-shared-postgres | ○ |
+| 001-shared-postgres | ● |
 | 002-postgres-store | ○ |
 | 003-unify-golang-design | ○ |
 

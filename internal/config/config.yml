@@ -4,6 +4,9 @@
 
 title: "Changkun Ou | changkun.de"
 host: https://changkun.de
+# Bind every interface. Naming a host here resolves to one interface, and
+# a container on more than one network then listens on whichever address
+# won the lookup, leaving the reverse proxy unable to reach it.
 addr: :9123
 development: true
 store: mongodb://localhost:27018

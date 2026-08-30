@@ -1,6 +1,6 @@
 ---
 title: Shared PostgreSQL instance
-status: drafted
+status: complete
 depends_on: []
 affects:
   - changkun/proxy:postgres/docker-compose.yml
@@ -226,3 +226,25 @@ and must be evidence-based rather than assumed:
   service on `traefik_proxy` are unaffected. Both compose projects on this
   host share the project name `docker`, so `down` and `--remove-orphans`
   stay forbidden.
+
+## Outcome
+
+Landed 2026-08-31. The instance runs as `postgres` under
+`changkun/proxy`, on `postgres_internal`, with no published port. All 17
+hostnames and 4,516,637 rows in `visits` matched the pre-move baseline
+exactly. urlstat reconnected with no restarts, and redir reaches
+`postgres:5432`, which is the connectivity `002-postgres-store.md` needs.
+
+One failure worth recording, because it will catch the next service that
+joins a second network. redir's deployment config set `addr: redir:80`,
+so the server resolved its own hostname and bound to that single address.
+With one network that is indistinguishable from binding everything; with
+two, it bound the `postgres_internal` address and traefik could no longer
+reach it, giving a 502 for about ninety seconds. The fix is `addr: :80`.
+The sample config now says so, but the general rule is: **joining a
+service to a second network can change which interface it listens on.**
+Check the bind address before attaching, not after.
+
+The old data directory at `urlstat/data/postgres` and the stopped
+`urlstat-urlstatdb-1` container are both retained as the rollback path and
+should be removed once this has run for a few days.
