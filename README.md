@@ -79,11 +79,12 @@ $ make           # build back-end and embed front-end files into binary
 $ redir -s # run the server, require an external database
 ```
 
-Build and deploy with Docker:
+Build and deploy with Docker. The image builds the dashboard and the
+server inside itself, so a deploy host needs only Docker:
 
 ```
 $ docker network create traefik_proxy
-$ make dashboard && make build && make up
+$ make build && make up
 ```
 
 ## Contributing

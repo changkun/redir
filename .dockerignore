@@ -1,2 +1,8 @@
+.git
+build
+redir
+coverage.txt
 data/mongo
+data/redis
 dashboard/node_modules
+dashboard/build

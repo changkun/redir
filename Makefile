@@ -30,8 +30,7 @@ run:
 dashboard:
 	cd dashboard && npm ci && npm run build
 build:
-	CGO_ENABLED=0 GOOS=linux go build $(BUILD_FLAGS)
-	docker build -f docker/Dockerfile -t $(IMAGE):latest .
+	docker build -f docker/Dockerfile --build-arg VERSION=$(VERSION) -t $(IMAGE):latest .
 up:
 	docker-compose -f docker/docker-compose.yml up -d
 down:
