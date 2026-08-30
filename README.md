@@ -67,7 +67,7 @@ Please check the [release](https://github.com/changkun/redir/releases) page.
 ### Build from Source
 
 You need [Go](https://golang.org) 1.27 or later to build the `redir`
-command, and [Node.js](https://nodejs.org) 20 or later to build the
+command, and [Node.js](https://nodejs.org) 22 or later to build the
 dashboard that gets embedded into it.
 
 Build everything into a single native binary:

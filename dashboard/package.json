@@ -24,12 +24,10 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
-  "browserslist": [
-    ">0.2%",
-    "not dead",
-    "not op_mini all"
-  ],
   "overrides": {
     "path-to-regexp": "^8.4.2"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }
