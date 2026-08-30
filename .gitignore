@@ -19,3 +19,4 @@ node_modules
 build
 .DS_Store
 vendor
+coverage.txt
