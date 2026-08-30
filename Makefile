@@ -31,10 +31,13 @@ dashboard:
 	cd dashboard && npm ci && npm run build
 build:
 	docker build -f docker/Dockerfile --build-arg VERSION=$(VERSION) -t $(IMAGE):latest .
+# Compose v2. The v1 python client cannot read the image metadata that
+# BuildKit writes and fails with KeyError: 'ContainerConfig' after it has
+# already removed the running container.
 up:
-	docker-compose -f docker/docker-compose.yml up -d
+	docker compose -f docker/docker-compose.yml up -d
 down:
-	docker-compose -f docker/docker-compose.yml down
+	docker compose -f docker/docker-compose.yml down
 
 
 release: $(GOOS)
