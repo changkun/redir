@@ -14,7 +14,7 @@ import (
 
 type item struct {
 	k string
-	v interface{}
+	v any
 }
 
 // LRU is a naive thread-safe LRU cache

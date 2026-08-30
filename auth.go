@@ -34,7 +34,7 @@ func init() {
 	t := time.NewTicker(time.Hour * 24 * 30)
 	go func() {
 		for range t.C {
-			blocklist.Range(func(k, v interface{}) bool {
+			blocklist.Range(func(k, v any) bool {
 				blocklist.Delete(k)
 				return true
 			})

@@ -56,9 +56,9 @@ func (s *server) sHandler() http.Handler {
 }
 
 type shortInput struct {
-	Op    short.Op    `json:"op"`
-	Alias string      `json:"alias"`
-	Data  interface{} `json:"data"`
+	Op    short.Op `json:"op"`
+	Alias string   `json:"alias"`
+	Data  any      `json:"data"`
 }
 
 type shortOutput struct {
@@ -567,7 +567,7 @@ func (s *server) statData(
 
 	w.Header().Add("Content-Type", "application/json")
 
-	var results interface{}
+	var results any
 	switch stat {
 	case "referer":
 		results, err = s.db.StatReferer(ctx, a, start, end)

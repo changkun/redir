@@ -4,58 +4,18 @@
 
 package utils
 
-import (
-	"math/rand"
-	"sync"
-	"time"
-)
+import "math/rand/v2"
 
 const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-var r = newRand()
-
-// Randstr generates a random string
+// Randstr generates a random string of n characters drawn from alphanum.
+//
+// The top-level math/rand/v2 generator is seeded from the runtime and is
+// safe for concurrent use, so no pooled source is needed here.
 func Randstr(n int) string {
-	var str string
-	length := len(alphanum)
-	for i := 0; i < n; i++ {
-		a := alphanum[r.Intn(len(alphanum))%length]
-		str += string(a)
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = alphanum[rand.IntN(len(alphanum))]
 	}
-	return str
-}
-
-type poolSource struct {
-	p *sync.Pool
-}
-
-func (s *poolSource) Int63() int64 {
-	v := s.p.Get()
-	defer s.p.Put(v)
-	return v.(rand.Source).Int63()
-}
-
-func (s *poolSource) Seed(seed int64) {
-	v := s.p.Get()
-	defer s.p.Put(v)
-	v.(rand.Source).Seed(seed)
-}
-
-func (s *poolSource) Uint64() uint64 {
-	v := s.p.Get()
-	defer s.p.Put(v)
-	return v.(rand.Source64).Uint64()
-}
-
-func newPoolSource() *poolSource {
-	s := &poolSource{}
-	p := &sync.Pool{New: func() interface{} {
-		return rand.NewSource(time.Now().Unix())
-	}}
-	s.p = p
-	return s
-}
-
-func newRand() *rand.Rand {
-	return rand.New(newPoolSource())
+	return string(b)
 }

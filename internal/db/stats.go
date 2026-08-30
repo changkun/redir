@@ -38,8 +38,8 @@ func (db *Store) StatReferer(
 						"$expr": bson.M{
 							"$and": []bson.M{
 								{"$eq": []string{a, "$alias"}},
-								{"$gte": []interface{}{"$time", start}},
-								{"$lt": []interface{}{"$time", end}},
+								{"$gte": []any{"$time", start}},
+								{"$lt": []any{"$time", end}},
 							},
 						},
 					}},
@@ -113,8 +113,8 @@ func (db *Store) StatUA(
 						"$expr": bson.M{
 							"$and": []bson.M{
 								{"$eq": []string{a, "$alias"}},
-								{"$gte": []interface{}{"$time", start}},
-								{"$lt": []interface{}{"$time", end}},
+								{"$gte": []any{"$time", start}},
+								{"$lt": []any{"$time", end}},
 							},
 						},
 					}},
@@ -245,8 +245,8 @@ func (db *Store) StatVisitHist(
 						"$expr": bson.M{
 							"$and": []bson.M{
 								{"$eq": []string{a, "$alias"}},
-								{"$gte": []interface{}{"$time", start}},
-								{"$lt": []interface{}{"$time", end}},
+								{"$gte": []any{"$time", start}},
+								{"$lt": []any{"$time", end}},
 							},
 						},
 					}},

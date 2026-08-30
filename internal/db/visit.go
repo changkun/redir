@@ -7,9 +7,9 @@ package db
 import (
 	"context"
 	"fmt"
+	"uuid"
 
 	"changkun.de/x/redir/internal/models"
-	"changkun.de/x/redir/internal/utils"
 )
 
 // RecordVisit records a visit event. If the visit is a new user, it returns
@@ -19,11 +19,7 @@ func (db *Store) RecordVisit(ctx context.Context, v *models.Visit) (string, erro
 
 	// if visitor ID does not present, then generate a new visitor ID.
 	if v.VisitorID == "" {
-		id, err := utils.NewUUID()
-		if err != nil {
-			panic(err) // impossible unless system error.
-		}
-		v.VisitorID = id.String()
+		v.VisitorID = uuid.New().String()
 	}
 
 	_, err := col.InsertOne(ctx, v)

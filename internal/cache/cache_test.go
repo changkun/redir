@@ -5,7 +5,7 @@
 package cache
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"testing"
 	"time"
@@ -124,8 +124,8 @@ func TestLRU(t *testing.T) {
 func rands() string {
 	var alphabet = "qazwsxedcrfvtgbyhnujmikolpQAZWSXEDCRFVTGBYHNUJMIKOLP"
 	ret := make([]byte, 5)
-	for i := 0; i < 5; i++ {
-		ret[i] = alphabet[rand.Intn(len(alphabet))]
+	for i := range 5 {
+		ret[i] = alphabet[rand.IntN(len(alphabet))]
 	}
 	return string(ret)
 }
