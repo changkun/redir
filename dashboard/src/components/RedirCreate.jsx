@@ -2,59 +2,23 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-import { ConfigProvider, Button, message } from 'antd';
-import ProForm, {
+import { App, Button } from 'antd';
+import {
   ModalForm,
+  ProForm,
   ProFormText,
   ProFormSelect,
   ProFormDateTimePicker,
-} from '@ant-design/pro-form';
-import enUS from 'antd/lib/locale/en_US'
+} from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
-
-const waitTime = (time = 100) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(true)
-    }, time)
-  })
-}
-
-const rfc3339 = (datestr) => {
-  if (datestr === '' || datestr === null || datestr === undefined) {
-    return null
-  }
-
-  const d = new Date(datestr)
-
-  function pad(n) {
-      return n < 10 ? "0" + n : n;
-  }
-
-  function timezoneOffset(offset) {
-      var sign;
-      if (offset === 0) {
-          return "Z";
-      }
-      sign = (offset > 0) ? "-" : "+";
-      offset = Math.abs(offset);
-      return sign + pad(Math.floor(offset / 60)) + ":" + pad(offset % 60);
-  }
-
-  return d.getFullYear() + "-" +
-      pad(d.getMonth() + 1) + "-" +
-      pad(d.getDate()) + "T" +
-      pad(d.getHours()) + ":" +
-      pad(d.getMinutes()) + ":" +
-      pad(d.getSeconds()) +
-      timezoneOffset(d.getTimezoneOffset());
-}
+import { aliasPath, aliasURL, basePath } from '../lib/paths';
+import { rfc3339 } from '../lib/time';
 
 const RedirCreate = (props) => {
+  const { message } = App.useApp()
   const ref = props.refreshRef
 
   return (
-    <ConfigProvider locale={enUS}>
     <ModalForm
       title="Create A New Short Link"
       submitter={{
@@ -73,12 +37,7 @@ const RedirCreate = (props) => {
         onCancel: () => console.log('nothing to do. really ;-)'),
       }}
       onFinish={async (values) => {
-        await waitTime(200);
-
-        const path = window.location.pathname.endsWith('/') ?
-          window.location.pathname.slice(0, -1) :
-          window.location.pathname
-        const resp = await fetch(path+'/', {
+        const resp = await fetch(basePath() + '/', {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
@@ -89,8 +48,8 @@ const RedirCreate = (props) => {
             data: {
               alias: values.alias,
               url: values.url,
-              private: values.private === 'true' ? true : false,
-              trust: values.trust === 'true' ? true : false,
+              private: values.private === 'true',
+              trust: values.trust === 'true',
               valid_from: rfc3339(values.valid_from),
             }
           })
@@ -100,8 +59,8 @@ const RedirCreate = (props) => {
           message.error(data.message)
           return false
         }
-        message.success(`Short link ${window.location.pathname}${values.alias} is created and has been saved to your clipboard!`, 10)
-        navigator.clipboard.writeText(`${window.location.host}${window.location.pathname}${values.alias}`)
+        message.success(`Short link ${aliasPath(values.alias)} is created and has been saved to your clipboard!`, 10)
+        navigator.clipboard.writeText(aliasURL(values.alias))
         ref.current.reload() // refresh table.
         return true
       }}
@@ -185,7 +144,6 @@ const RedirCreate = (props) => {
       />
       </ProForm.Group>
     </ModalForm>
-    </ConfigProvider>
   )
 }
 

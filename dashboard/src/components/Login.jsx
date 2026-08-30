@@ -6,11 +6,13 @@ import { Button } from 'antd'
 
 const Login = (props) => {
   if (props.isAdmin) {
-    return (
-      <Button danger><a href={window.location.pathname}>Logout</a></Button>
-    )
+    return <Button danger href={window.location.pathname}>Logout</Button>
   }
-  return <Button><a href={window.location.pathname + '?mode=admin'}>Go to Dashboard</a></Button>
+  return (
+    <Button href={window.location.pathname + '?mode=admin'}>
+      Go to Dashboard
+    </Button>
+  )
 }
 
 export default Login

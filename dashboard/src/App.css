@@ -2,24 +2,12 @@
 Use of this source code is governed by a MIT
 license that can be found in the LICENSE file. */
 
-@import '~antd/dist/antd.dark.css';
-
+/* antd 5 themes its own components through the dark algorithm, so only
+the page canvas behind them needs a colour here. */
 body {
-  background-color: #1f1f1f;
-}
-.ant-layout-header {
-  background-color: #1f1f1f;
-}
-.ant-layout-content {
-  background-color: #262626;
-}
-.ant-layout-footer {
-  background-color: #262626;
+  background-color: #000;
 }
 .ant-card-body {
   padding-top: 20px !important;
   padding-bottom: 20px !important;
-}
-tr.ant-table-expanded-row > td, tr.ant-table-expanded-row:hover > td {
-  background: rgb(20, 20, 20);
 }

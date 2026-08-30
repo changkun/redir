@@ -42,7 +42,7 @@ See https://changkun.de/s/redir for more details.
 
 Version: dev
 
-GoVersion: devel go1.18-39e08c6cd7 Tue Sep 21 13:18:09 2021 +0000
+GoVersion: go1.27.0
 
 Command line usage:
 
@@ -66,7 +66,9 @@ Please check the [release](https://github.com/changkun/redir/releases) page.
 
 ### Build from Source
 
-You need install [Go](https://golang.org) to build the `redir` command.
+You need [Go](https://golang.org) 1.27 or later to build the `redir`
+command, and [Node.js](https://nodejs.org) 20 or later to build the
+dashboard that gets embedded into it.
 
 Build everything into a single native binary:
 
