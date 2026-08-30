@@ -28,5 +28,8 @@
     ">0.2%",
     "not dead",
     "not op_mini all"
-  ]
+  ],
+  "overrides": {
+    "path-to-regexp": "^8.4.2"
+  }
 }
