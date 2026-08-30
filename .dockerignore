@@ -6,3 +6,4 @@ data/mongo
 data/redis
 dashboard/node_modules
 dashboard/build
+.env

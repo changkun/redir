@@ -58,6 +58,32 @@ The [default configuration](./internal/config/config.yml) is embedded into the b
 
 Alternative configuration can be used to replace default config and specified in environtment variable `REDIR_CONF`, for example `REDIR_CONF=/path/to/config.yml redir -s` to run the redir server under given configuration.
 
+## Login
+
+The admin dashboard supports three modes, set by `auth.enable` in the
+configuration file:
+
+| Mode | Who can administer |
+|---|---|
+| `latere` | Anyone signing in through [auth.latere.ai](https://auth.latere.ai) who is on the allowlist |
+| `basic`  | The username and password pairs listed under `auth.basic` |
+| `none`   | Everyone. Only sensible behind another access control |
+
+`latere` runs the OAuth 2.0 authorization code flow with PKCE and keeps the
+result in an encrypted session cookie. It needs an OAuth client registered
+for your deployment, whose `redirect_uris` include `<host>/s/.auth/callback`
+and whose `allowed_origins` include `<host>`. Configure it with the
+environment variables in [.env.template](./.env.template); copy that file to
+`.env` and fill it in.
+
+Signing in proves who a visitor is, not that they may manage your links, so
+`AUTH_ALLOWED_PRINCIPALS` decides separately. It is a comma separated list
+of emails or principal ids, matched case insensitively. An empty list
+rejects every login.
+
+The dashboard then offers Logout at `/s/.auth/logout`, which ends the
+session.
+
 ## Deployment
 
 ### Download Pre-Builds
