@@ -6,7 +6,13 @@ import { Button } from 'antd'
 
 const Login = (props) => {
   if (props.isAdmin) {
-    return <Button danger href={window.location.pathname}>Logout</Button>
+    // With a real session there is somewhere to send the visitor to end it.
+    // Under basic auth there is not, so reloading is all Logout can do.
+    return (
+      <Button danger href={props.logoutURL || window.location.pathname}>
+        Logout
+      </Button>
+    )
   }
   return (
     <Button href={window.location.pathname + '?mode=admin'}>

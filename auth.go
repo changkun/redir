@@ -9,12 +9,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"changkun.de/x/login"
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/utils"
 )
@@ -54,17 +52,21 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (user string
 	switch config.Conf.Auth.Enable {
 	case config.None:
 		return
-	case config.SSO:
-		user, err := login.HandleAuth(w, r)
-		if err != nil {
-			uu, _ := url.Parse(config.Conf.Auth.SSO)
-			q := uu.Query()
-			q.Set("redirect", "https://"+r.Host+r.URL.String())
-			uu.RawQuery = q.Encode()
-			http.Redirect(w, r, uu.String(), http.StatusFound)
+	case config.Latere:
+		if user = s.latere.user(w, r); user != "" {
+			return user, nil
 		}
-		return user, err
+		http.Redirect(w, r,
+			s.latere.loginURL(config.Conf.S.Prefix, r), http.StatusFound)
+		return "", fmt.Errorf("%w: no signed in latere principal", errUnauthorized)
 	case config.Basic:
+		// Handled below.
+	default:
+		// An unknown mode used to fall through to basic auth. Refuse
+		// administration instead of guessing which login was meant.
+		w.WriteHeader(http.StatusForbidden)
+		return "", fmt.Errorf("%w: unknown auth mode %q",
+			errUnauthorized, config.Conf.Auth.Enable)
 	}
 
 	w.Header().Set("WWW-Authenticate", `Basic realm="redir"`)

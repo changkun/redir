@@ -20,7 +20,7 @@ import (
 func TestDashboardEmbedContract(t *testing.T) {
 	placeholders := []string{
 		"AdminView", "StatsMode", "DevMode",
-		"ShowImpressum", "ShowPrivacy", "ShowContact",
+		"ShowImpressum", "ShowPrivacy", "ShowContact", "LogoutURL",
 	}
 	for _, p := range placeholders {
 		if want := "{{." + p + "}}"; !strings.Contains(dtmpl, want) {

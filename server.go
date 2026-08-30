@@ -22,8 +22,9 @@ import (
 )
 
 type server struct {
-	db    *db.Store
-	cache *cache.LRU
+	db     *db.Store
+	cache  *cache.LRU
+	latere *latereAuth // nil unless auth.enable is latere and it is configured
 }
 
 var (
@@ -85,7 +86,12 @@ func newServer(ctx context.Context) *server {
 			config.Conf.Store, err)
 	}
 	log.Printf("connected to %s", config.Conf.Store)
-	return &server{db: db, cache: cache.NewLRU(true)}
+
+	var latere *latereAuth
+	if config.Conf.Auth.Enable == config.Latere {
+		latere = newLatereAuth(config.Conf.S.Prefix)
+	}
+	return &server{db: db, cache: cache.NewLRU(true), latere: latere}
 }
 
 func (s *server) close() {

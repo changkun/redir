@@ -42,6 +42,7 @@ const App = () => {
             showImpressum={flag(root, 'show-impressum')}
             showPrivacy={flag(root, 'show-privacy')}
             showContact={flag(root, 'show-contact')}
+          logoutURL={root.getAttribute('logout-url') || ''}
           />
         </AntApp>
       </ProConfigProvider>

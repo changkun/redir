@@ -20,9 +20,9 @@ import (
 type authType string
 
 var (
-	None  authType = "none"
-	Basic authType = "basic"
-	SSO   authType = "sso"
+	None   authType = "none"
+	Basic  authType = "basic"
+	Latere authType = "latere"
 )
 
 type config struct {
@@ -45,7 +45,6 @@ type config struct {
 	} `yaml:"x"`
 	Auth struct {
 		Enable authType `yaml:"enable"`
-		SSO    string   `yaml:"sso"`
 		Basic  []struct {
 			Username string `yaml:"username"`
 			Password string `yaml:"password"`
@@ -91,6 +90,18 @@ func (c *config) parse() {
 	err = yaml.Unmarshal(d, c)
 	if err != nil {
 		log.Fatalf("cannot parse configuration: %v\n", err)
+	}
+
+	// An unrecognised auth mode used to fall through to basic auth, which
+	// turns a typo into a silently different login. Report it here;
+	// handleAuth then refuses administration. Serving public redirects
+	// does not depend on this setting, so it is not worth refusing to
+	// start over.
+	switch c.Auth.Enable {
+	case None, Basic, Latere:
+	default:
+		log.Printf("unknown auth.enable %q, administration is disabled; want one of: %v, %v, %v",
+			c.Auth.Enable, None, Basic, Latere)
 	}
 
 	var buf bytes.Buffer

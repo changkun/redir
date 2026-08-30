@@ -263,6 +263,15 @@ func (s *server) serveStatic(
 		d *pageInfo
 	)
 	switch {
+	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+loginPath):
+		s.latere.client.HandleLogin(w, r)
+		return nil
+	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+callbackPath):
+		s.latere.client.HandleCallback(w, r)
+		return nil
+	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+logoutPath):
+		s.latere.client.HandleLogout(w, r)
+		return nil
 	case strings.HasPrefix(r.URL.Path, prefix+".static"):
 		// Serve static files under ./.static/*. This should not conflict
 		// with all existing aliases, meaning that alias should not start
@@ -443,6 +452,7 @@ func (s *server) sIndex(
 		ShowImpressum bool
 		ShowPrivacy   bool
 		ShowContact   bool
+		LogoutURL     string
 	}{
 		AdminView:     false,
 		StatsMode:     config.Conf.Stats.Enable,
@@ -450,6 +460,9 @@ func (s *server) sIndex(
 		ShowImpressum: config.Conf.GDPR.Impressum.Enable,
 		ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
 		ShowContact:   config.Conf.GDPR.Contact.Enable,
+		// Only a real session can be ended. Under basic auth the dashboard
+		// keeps its old reload-the-page behaviour.
+		LogoutURL: logoutURL(),
 	}
 
 	mode := r.URL.Query().Get("mode")

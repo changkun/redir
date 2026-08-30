@@ -22,7 +22,7 @@ const Home = (props) => {
             <a href="/s" style={{fontSize: '28px'}}>redir</a>
           </Col>
           <Col>
-            <Login isAdmin={props.isAdmin} />
+            <Login isAdmin={props.isAdmin} logoutURL={props.logoutURL} />
           </Col>
         </Row>
       </Header>
