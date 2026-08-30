@@ -13,12 +13,12 @@ type BaseInline struct {
 	BaseNode
 }
 
-// Type implements Node.Type
+// Type implements Node.Type.
 func (b *BaseInline) Type() NodeType {
 	return TypeInline
 }
 
-// IsRaw implements Node.IsRaw
+// IsRaw implements Node.IsRaw.
 func (b *BaseInline) IsRaw() bool {
 	return false
 }
@@ -33,12 +33,12 @@ func (b *BaseInline) SetBlankPreviousLines(v bool) {
 	panic("can not call with inline nodes.")
 }
 
-// Lines implements Node.Lines
+// Lines implements Node.Lines.
 func (b *BaseInline) Lines() *textm.Segments {
 	panic("can not call with inline nodes.")
 }
 
-// SetLines implements Node.SetLines
+// SetLines implements Node.SetLines.
 func (b *BaseInline) SetLines(v *textm.Segments) {
 	panic("can not call with inline nodes.")
 }
@@ -78,6 +78,11 @@ func textFlagsString(flags uint8) string {
 
 // Inline implements Inline.Inline.
 func (n *Text) Inline() {
+}
+
+// Pos implements Node.Pos.
+func (n *Text) Pos() int {
+	return n.Segment.Start
 }
 
 // SoftLineBreak returns true if this node ends with a new line,
@@ -132,7 +137,8 @@ func (n *Text) Merge(node Node, source []byte) bool {
 	if !ok {
 		return false
 	}
-	if n.Segment.Stop != t.Segment.Start || t.Segment.Padding != 0 || source[n.Segment.Stop-1] == '\n' || t.IsRaw() != n.IsRaw() {
+	if n.Segment.Stop != t.Segment.Start || t.Segment.Padding != 0 ||
+		source[n.Segment.Stop-1] == '\n' || t.IsRaw() != n.IsRaw() {
 		return false
 	}
 	n.Segment.Stop = t.Segment.Stop
@@ -142,17 +148,28 @@ func (n *Text) Merge(node Node, source []byte) bool {
 }
 
 // Text implements Node.Text.
+//
+// Deprecated: Use other properties of the node to get the text value(i.e. Text.Value).
 func (n *Text) Text(source []byte) []byte {
+	return n.Segment.Value(source)
+}
+
+// Value returns a value of this node.
+// SoftLineBreaks are not included in the returned value.
+func (n *Text) Value(source []byte) []byte {
 	return n.Segment.Value(source)
 }
 
 // Dump implements Node.Dump.
 func (n *Text) Dump(source []byte, level int) {
+	m := map[string]string{
+		"Value": "\"" + strings.TrimRight(string(n.Value(source)), "\n") + "\"",
+	}
 	fs := textFlagsString(n.flags)
 	if len(fs) != 0 {
-		fs = "(" + fs + ")"
+		m["Flags"] = fs
 	}
-	fmt.Printf("%sText%s: \"%s\"\n", strings.Repeat("    ", level), fs, strings.TrimRight(string(n.Text(source)), "\n"))
+	DumpHelper(n, source, level, m, nil)
 }
 
 // KindText is a NodeKind of the Text node.
@@ -214,7 +231,7 @@ func MergeOrReplaceTextSegment(parent Node, n Node, s textm.Segment) {
 	}
 }
 
-// A String struct is a textual content that has a concrete value
+// A String struct is a textual content that has a concrete value.
 type String struct {
 	BaseInline
 
@@ -224,6 +241,12 @@ type String struct {
 
 // Inline implements Inline.Inline.
 func (n *String) Inline() {
+}
+
+// Pos implements Node.Pos.
+// String node does not have a position because it is not associated with a source text.
+func (n *String) Pos() int {
+	return -1
 }
 
 // IsRaw returns true if this text should be rendered without unescaping
@@ -257,6 +280,8 @@ func (n *String) SetCode(v bool) {
 }
 
 // Text implements Node.Text.
+//
+// Deprecated: Use other properties of the node to get the text value(i.e. String.Value).
 func (n *String) Text(source []byte) []byte {
 	return n.Value
 }
@@ -305,7 +330,7 @@ func (n *CodeSpan) IsBlank(source []byte) bool {
 	return true
 }
 
-// Dump implements Node.Dump
+// Dump implements Node.Dump.
 func (n *CodeSpan) Dump(source []byte, level int) {
 	DumpHelper(n, source, level, nil, nil)
 }
@@ -365,10 +390,57 @@ type baseLink struct {
 
 	// Title is a title of this link.
 	Title []byte
+
+	// Reference is a reference of this link. This field is used for reference links.
+	// If this link is not a reference link, this field is nil.
+	Reference *ReferenceLink
 }
 
 // Inline implements Inline.Inline.
 func (n *baseLink) Inline() {
+}
+
+// ReferenceLinkType defines a kind of reference link.
+type ReferenceLinkType int
+
+const (
+	// ReferenceLinkFull indicates that a reference link has a full reference like [foo][bar].
+	ReferenceLinkFull ReferenceLinkType = iota + 1
+	// ReferenceLinkCollapsed indicates that a reference link has a collapsed reference like [foo][].
+	ReferenceLinkCollapsed
+	// ReferenceLinkShortcut indicates that a reference link has a shortcut reference like [foo].
+	ReferenceLinkShortcut
+)
+
+// String returns a string representation of this reference link type.
+func (t ReferenceLinkType) String() string {
+	switch t {
+	case ReferenceLinkFull:
+		return "Full"
+	case ReferenceLinkCollapsed:
+		return "Collapsed"
+	case ReferenceLinkShortcut:
+		return "Shortcut"
+	default:
+		return fmt.Sprintf("Unknown(%d)", t)
+	}
+}
+
+// ReferenceLink struct represents a reference link of the Markdown text.
+type ReferenceLink struct {
+	// Type is a kind of this reference link.
+	Type ReferenceLinkType
+
+	// Value is a value of this reference link.
+	Value []byte
+}
+
+// NewReferenceLink returns a new ReferenceLink with the given type and value.
+func NewReferenceLink(typ ReferenceLinkType, value []byte) *ReferenceLink {
+	return &ReferenceLink{
+		Type:  typ,
+		Value: value,
+	}
 }
 
 // A Link struct represents a link of the Markdown text.
@@ -380,8 +452,22 @@ type Link struct {
 func (n *Link) Dump(source []byte, level int) {
 	m := map[string]string{}
 	m["Destination"] = string(n.Destination)
-	m["Title"] = string(n.Title)
-	DumpHelper(n, source, level, m, nil)
+	if len(n.Title) != 0 {
+		m["Title"] = string(n.Title)
+	}
+	cb := func(int) {}
+	if n.Reference != nil {
+		cb = func(level int) {
+			indent := strings.Repeat("    ", level)
+			fmt.Printf("%sReference {\n", indent)
+			indent2 := strings.Repeat("    ", level+1)
+			fmt.Printf("%sType : %s\n", indent2, n.Reference.Type.String())
+			fmt.Printf("%sValue : %s\n", indent2, string(n.Reference.Value))
+			fmt.Printf("%s}\n", indent)
+
+		}
+	}
+	DumpHelper(n, source, level, m, cb)
 }
 
 // KindLink is a NodeKind of the Link node.
@@ -411,8 +497,22 @@ type Image struct {
 func (n *Image) Dump(source []byte, level int) {
 	m := map[string]string{}
 	m["Destination"] = string(n.Destination)
-	m["Title"] = string(n.Title)
-	DumpHelper(n, source, level, m, nil)
+	if len(n.Title) != 0 {
+		m["Title"] = string(n.Title)
+	}
+	cb := func(int) {}
+	if n.Reference != nil {
+		cb = func(level int) {
+			indent := strings.Repeat("    ", level)
+			fmt.Printf("%sReference {\n", indent)
+			indent2 := strings.Repeat("    ", level+1)
+			fmt.Printf("%sType : %s\n", indent2, n.Reference.Type.String())
+			fmt.Printf("%sValue : %s\n", indent2, string(n.Reference.Value))
+			fmt.Printf("%s}\n", indent)
+
+		}
+	}
+	DumpHelper(n, source, level, m, cb)
 }
 
 // KindImage is a NodeKind of the Image node.
@@ -432,6 +532,7 @@ func NewImage(link *Link) *Image {
 	}
 	c.Destination = link.Destination
 	c.Title = link.Title
+	c.Reference = link.Reference
 	for n := link.FirstChild(); n != nil; {
 		next := n.NextSibling()
 		link.RemoveChild(link, n)
@@ -467,7 +568,7 @@ type AutoLink struct {
 // Inline implements Inline.Inline.
 func (n *AutoLink) Inline() {}
 
-// Dump implements Node.Dump
+// Dump implements Node.Dump.
 func (n *AutoLink) Dump(source []byte, level int) {
 	segment := n.value.Segment
 	m := map[string]string{
@@ -491,15 +592,22 @@ func (n *AutoLink) URL(source []byte) []byte {
 		ret := make([]byte, 0, len(n.Protocol)+s.Len()+3)
 		ret = append(ret, n.Protocol...)
 		ret = append(ret, ':', '/', '/')
-		ret = append(ret, n.value.Text(source)...)
+		ret = append(ret, n.value.Value(source)...)
 		return ret
 	}
-	return n.value.Text(source)
+	return n.value.Value(source)
 }
 
 // Label returns a label of this node.
 func (n *AutoLink) Label(source []byte) []byte {
-	return n.value.Text(source)
+	return n.value.Value(source)
+}
+
+// Text implements Node.Text.
+//
+// Deprecated: Use other properties of the node to get the text value(i.e. AutoLink.Label).
+func (n *AutoLink) Text(source []byte) []byte {
+	return n.value.Value(source)
 }
 
 // NewAutoLink returns a new AutoLink node.
@@ -524,7 +632,7 @@ func (n *RawHTML) Inline() {}
 func (n *RawHTML) Dump(source []byte, level int) {
 	m := map[string]string{}
 	t := []string{}
-	for i := 0; i < n.Segments.Len(); i++ {
+	for i := range n.Segments.Len() {
 		segment := n.Segments.At(i)
 		t = append(t, string(segment.Value(source)))
 	}
@@ -538,6 +646,13 @@ var KindRawHTML = NewNodeKind("RawHTML")
 // Kind implements Node.Kind.
 func (n *RawHTML) Kind() NodeKind {
 	return KindRawHTML
+}
+
+// Text implements Node.Text.
+//
+// Deprecated: Use other properties of the node to get the text value(i.e. RawHTML.Segments).
+func (n *RawHTML) Text(source []byte) []byte {
+	return n.Segments.Value(source)
 }
 
 // NewRawHTML returns a new RawHTML node.

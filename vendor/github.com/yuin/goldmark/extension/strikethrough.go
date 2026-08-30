@@ -46,10 +46,11 @@ func (s *strikethroughParser) Trigger() []byte {
 func (s *strikethroughParser) Parse(parent gast.Node, block text.Reader, pc parser.Context) gast.Node {
 	before := block.PrecendingCharacter()
 	line, segment := block.PeekLine()
-	node := parser.ScanDelimiter(line, before, 2, defaultStrikethroughDelimiterProcessor)
-	if node == nil {
+	node := parser.ScanDelimiter(line, before, 1, defaultStrikethroughDelimiterProcessor)
+	if node == nil || node.OriginalLength > 2 || before == '~' {
 		return nil
 	}
+
 	node.Segment = segment.WithStop(segment.Start + node.OriginalLength)
 	block.Advance(node.OriginalLength)
 	pc.PushDelimiter(node)
@@ -85,7 +86,8 @@ func (r *StrikethroughHTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncR
 // StrikethroughAttributeFilter defines attribute names which dd elements can have.
 var StrikethroughAttributeFilter = html.GlobalAttributeFilter
 
-func (r *StrikethroughHTMLRenderer) renderStrikethrough(w util.BufWriter, source []byte, n gast.Node, entering bool) (gast.WalkStatus, error) {
+func (r *StrikethroughHTMLRenderer) renderStrikethrough(
+	w util.BufWriter, source []byte, n gast.Node, entering bool) (gast.WalkStatus, error) {
 	if entering {
 		if n.Attributes() != nil {
 			_, _ = w.WriteString("<del")

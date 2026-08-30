@@ -91,10 +91,11 @@ func (b *setextHeadingParser) Close(node ast.Node, reader text.Reader, pc Contex
 			para.Lines().Append(segment)
 			heading.Parent().InsertAfter(heading.Parent(), heading, para)
 		} else {
-			next.(ast.Node).Lines().Unshift(segment)
+			next.Lines().Unshift(segment)
 		}
 		heading.Parent().RemoveChild(heading.Parent(), heading)
 	} else {
+		heading.SetPos(tmp.Lines().At(0).Start)
 		heading.SetLines(tmp.Lines())
 		heading.SetBlankPreviousLines(tmp.HasBlankPreviousLines())
 		tp := tmp.Parent()

@@ -11,9 +11,9 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-var wwwURLRegxp = regexp.MustCompile(`^www\.[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]+(?:[/#?][-a-zA-Z0-9@:%_\+.~#!?&/=\(\);,'">\^{}\[\]` + "`" + `]*)?`)
+var wwwURLRegxp = regexp.MustCompile(`^www\.[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]+(?:[/#?][-a-zA-Z0-9@:%_\+.~#!?&/=\(\);,'">\^{}\[\]` + "`" + `]*)?`) //nolint:golint,lll
 
-var urlRegexp = regexp.MustCompile(`^(?:http|https|ftp)://[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]+(?::\d+)?(?:[/#?][-a-zA-Z0-9@:%_+.~#$!?&/=\(\);,'">\^{}\[\]` + "`" + `]*)?`)
+var urlRegexp = regexp.MustCompile(`^(?:http|https|ftp)://[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]+(?::\d+)?(?:[/#?][-a-zA-Z0-9@:%_+.~#$!?&/=\(\);,'">\^{}\[\]` + "`" + `]*)?`) //nolint:golint,lll
 
 // An LinkifyConfig struct is a data structure that holds configuration of the
 // Linkify extension.
@@ -32,7 +32,7 @@ const (
 )
 
 // SetOption implements SetOptioner.
-func (c *LinkifyConfig) SetOption(name parser.OptionName, value interface{}) {
+func (c *LinkifyConfig) SetOption(name parser.OptionName, value any) {
 	switch name {
 	case optLinkifyAllowedProtocols:
 		c.AllowedProtocols = value.([][]byte)
@@ -66,10 +66,12 @@ func (o *withLinkifyAllowedProtocols) SetLinkifyOption(p *LinkifyConfig) {
 // WithLinkifyAllowedProtocols is a functional option that specify allowed
 // protocols in autolinks. Each protocol must end with ':' like
 // 'http:' .
-func WithLinkifyAllowedProtocols(value [][]byte) LinkifyOption {
-	return &withLinkifyAllowedProtocols{
-		value: value,
+func WithLinkifyAllowedProtocols[T []byte | string](value []T) LinkifyOption {
+	opt := &withLinkifyAllowedProtocols{}
+	for _, v := range value {
+		opt.value = append(opt.value, []byte(v))
 	}
+	return opt
 }
 
 type withLinkifyURLRegexp struct {
@@ -92,9 +94,6 @@ func WithLinkifyURLRegexp(value *regexp.Regexp) LinkifyOption {
 	}
 }
 
-// WithLinkifyWWWRegexp is a functional option that specify
-// a pattern of the URL without a protocol.
-// This pattern must start with 'www.' .
 type withLinkifyWWWRegexp struct {
 	value *regexp.Regexp
 }
@@ -107,14 +106,15 @@ func (o *withLinkifyWWWRegexp) SetLinkifyOption(p *LinkifyConfig) {
 	p.WWWRegexp = o.value
 }
 
+// WithLinkifyWWWRegexp is a functional option that specify
+// a pattern of the URL without a protocol.
+// This pattern must start with 'www.' .
 func WithLinkifyWWWRegexp(value *regexp.Regexp) LinkifyOption {
 	return &withLinkifyWWWRegexp{
 		value: value,
 	}
 }
 
-// WithLinkifyWWWRegexp is a functional otpion that specify
-// a pattern of the email address.
 type withLinkifyEmailRegexp struct {
 	value *regexp.Regexp
 }
@@ -127,6 +127,8 @@ func (o *withLinkifyEmailRegexp) SetLinkifyOption(p *LinkifyConfig) {
 	p.EmailRegexp = o.value
 }
 
+// WithLinkifyEmailRegexp is a functional otpion that specify
+// a pattern of the email address.
 func WithLinkifyEmailRegexp(value *regexp.Regexp) LinkifyOption {
 	return &withLinkifyEmailRegexp{
 		value: value,
@@ -209,9 +211,10 @@ func (s *linkifyParser) Parse(parent ast.Node, block text.Reader, pc parser.Cont
 		} else if lastChar == ')' {
 			closing := 0
 			for i := m[1] - 1; i >= m[0]; i-- {
-				if line[i] == ')' {
+				switch line[i] {
+				case ')':
 					closing++
-				} else if line[i] == '(' {
+				case '(':
 					closing--
 				}
 			}
@@ -252,7 +255,7 @@ func (s *linkifyParser) Parse(parent ast.Node, block text.Reader, pc parser.Cont
 		}
 		at := bytes.IndexByte(line, '@')
 		m = []int{0, stop, at, stop - 1}
-		if m == nil || bytes.IndexByte(line[m[2]:m[3]], '.') < 0 {
+		if bytes.IndexByte(line[m[2]:m[3]], '.') < 0 {
 			return nil
 		}
 		lastChar := line[m[1]-1]
@@ -303,6 +306,8 @@ type linkify struct {
 // Linkify is an extension that allow you to parse text that seems like a URL.
 var Linkify = &linkify{}
 
+// NewLinkify creates a new [goldmark.Extender] that
+// allow you to parse text that seems like a URL.
 func NewLinkify(opts ...LinkifyOption) goldmark.Extender {
 	return &linkify{
 		options: opts,

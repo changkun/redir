@@ -79,7 +79,7 @@ func HandleAuth(w http.ResponseWriter, r *http.Request) (string, error) {
 
 	u, err := Verify(token)
 	if err == nil {
-		w.Header().Set("Set-Cookie", fmt.Sprintf("auth=%s; Max-Age=%d", token, 60*60*24*60)) // 3 months
+		w.Header().Set("Set-Cookie", fmt.Sprintf("auth=%s; Domain=changkun.de; Path=/; Max-Age=%d; SameSite=Lax", token, 60*60*24*60)) // 3 months
 	}
 	return u, err
 }
@@ -98,9 +98,18 @@ func RequestToken(user, pass string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	cookies := resp.Cookies()
-	if resp.StatusCode != http.StatusOK || len(cookies) == 0 {
+	if resp.StatusCode != http.StatusOK {
 		return "", ErrUnauthorized
 	}
-	return cookies[0].Value, nil
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", ErrBadRequest
+	}
+	if result.Token == "" {
+		return "", ErrUnauthorized
+	}
+	return result.Token, nil
 }
