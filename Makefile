@@ -6,7 +6,7 @@ VERSION = $(shell git describe --always --tags)
 IMAGE = redir
 BINARY = redir
 TARGET = -o $(BINARY)
-BUILD_FLAGS = $(TARGET) -mod=vendor
+BUILD_FLAGS = $(TARGET)
 GOOS = linux darwin
 GOARCH = amd64 arm64
 
@@ -18,7 +18,7 @@ $(GOOS): $(GOARCH)
 	for goarch in $^ ; do \
 		mkdir -p build/$(BINARY); \
 		cp internal/config/config.yml build/$(BINARY)/config.yml; \
-		CGO_ENABLED=0 GOARCH=$${goarch} GOOS=$@ go build -o build/$(BINARY)/$(BINARY) -mod=vendor; \
+		CGO_ENABLED=0 GOARCH=$${goarch} GOOS=$@ go build -o build/$(BINARY)/$(BINARY); \
 		zip -r build/redir-$(VERSION)-$@-$${goarch}.zip build/$(BINARY); \
 		rm -rf build/$(BINARY); \
 	done
@@ -28,7 +28,7 @@ $(GOOS): $(GOARCH)
 run:
 	./$(BINARY) -s
 dashboard:
-	cd dashboard && npm i && npm run build
+	cd dashboard && npm ci && npm run build
 build:
 	CGO_ENABLED=0 GOOS=linux go build $(BUILD_FLAGS)
 	docker build -f docker/Dockerfile -t $(IMAGE):latest .
