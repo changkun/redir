@@ -14,11 +14,15 @@ import (
 	"changkun.de/x/redir/internal/models"
 )
 
+// host is the site every entry in these tests belongs to, except where
+// a test deliberately uses a second one.
+const host = "changkun.de"
+
 func TestLRU(t *testing.T) {
 	l := NewLRU(false)
 	l.cap = 2 // limit the capacity for testing
 
-	if _, ok := l.Get("a"); ok {
+	if _, ok := l.Get(host, "a"); ok {
 		t.Fatalf("Get value from empty LRU")
 	}
 	if l.Len() != 0 {
@@ -31,8 +35,8 @@ func TestLRU(t *testing.T) {
 		Private:   false,
 		ValidFrom: time.Now(),
 	}
-	l.Put("a", r)
-	_, ok := l.Get("a")
+	l.Put(host, "a", r)
+	_, ok := l.Get(host, "a")
 	if !ok {
 		t.Fatalf("Get value from LRU found nothing")
 	}
@@ -40,13 +44,13 @@ func TestLRU(t *testing.T) {
 		t.Fatalf("wrong size, want 1, got %v", l.Len())
 	}
 
-	l.Put("b", &models.Redir{
+	l.Put(host, "b", &models.Redir{
 		Alias:     "b",
 		URL:       "2",
 		Private:   false,
 		ValidFrom: time.Now(),
 	})
-	v, ok := l.Get("a")
+	v, ok := l.Get(host, "a")
 	if !ok { // a -> b
 		t.Fatalf("Get value after Put from LRU found nothing")
 	}
@@ -63,12 +67,12 @@ func TestLRU(t *testing.T) {
 		Private:   false,
 		ValidFrom: time.Now(),
 	}
-	l.Put("c", r)
-	_, ok = l.Get("b")
+	l.Put(host, "c", r)
+	_, ok = l.Get(host, "b")
 	if ok {
 		t.Fatalf("Get value success meaning LRU incorrect")
 	}
-	v, ok = l.Get("c")
+	v, ok = l.Get(host, "c")
 	if !ok {
 		t.Fatalf("Get value fail meaning LRU incorrect")
 	}
@@ -85,19 +89,19 @@ func TestLRU(t *testing.T) {
 	}
 
 	tt := time.Now().UTC()
-	l.Put("a", &models.Redir{
+	l.Put(host, "a", &models.Redir{
 		Alias:     "a",
 		URL:       "1",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("b", &models.Redir{
+	l.Put(host, "b", &models.Redir{
 		Alias:     "b",
 		URL:       "2",
 		Private:   false,
 		ValidFrom: tt,
 	})
-	l.Put("c", &models.Redir{
+	l.Put(host, "c", &models.Redir{
 		Alias:     "c",
 		URL:       "3",
 		Private:   false,
@@ -109,8 +113,8 @@ func TestLRU(t *testing.T) {
 		Private:   false,
 		ValidFrom: time.Now().UTC(),
 	}
-	l.Put("a", rr)
-	v, ok = l.Get("a")
+	l.Put(host, "a", rr)
+	v, ok = l.Get(host, "a")
 	if !ok {
 		t.Fatalf("Get value from LRU found nothing")
 	}
@@ -140,11 +144,11 @@ func BenchmarkLRU(b *testing.B) {
 		Private:   false,
 		ValidFrom: time.Now(),
 	}
-	l.Put("a", r)
+	l.Put(host, "a", r)
 	b.Run("Get", func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				l.Get("a")
+				l.Get(host, "a")
 			}
 		})
 	})
@@ -159,7 +163,7 @@ func BenchmarkLRU(b *testing.B) {
 				ValidFrom: time.Now(),
 			}
 			for pb.Next() {
-				l.Put(k, v)
+				l.Put(host, k, v)
 			}
 		})
 	})
@@ -177,7 +181,7 @@ func BenchmarkLRU(b *testing.B) {
 					ValidFrom: time.Now(),
 				}
 				// each put has a different k/v
-				l.Put(k, v)
+				l.Put(host, k, v)
 			}
 		})
 	})
@@ -191,13 +195,13 @@ func TestLRUFlush(t *testing.T) {
 	l := NewLRU(false)
 	keys := []string{"a", "b", "c"}
 	for _, k := range keys {
-		l.Put(k, &models.Redir{Alias: k, ValidFrom: time.Now()})
+		l.Put(host, k, &models.Redir{Alias: k, ValidFrom: time.Now()})
 	}
 
 	l.Flush()
 
 	for _, k := range keys {
-		if _, ok := l.Get(k); ok {
+		if _, ok := l.Get(host, k); ok {
 			t.Errorf("Get(%q) hits after Flush, want a miss", k)
 		}
 	}
@@ -214,7 +218,7 @@ func TestLRUFlush(t *testing.T) {
 func TestLRUGetConcurrent(t *testing.T) {
 	l := NewLRU(false)
 	for _, k := range []string{"a", "b"} {
-		l.Put(k, &models.Redir{Alias: k, ValidFrom: time.Now()})
+		l.Put(host, k, &models.Redir{Alias: k, ValidFrom: time.Now()})
 	}
 
 	var wg sync.WaitGroup
@@ -223,10 +227,61 @@ func TestLRUGetConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range 200 {
-				l.Get("a")
-				l.Get("b")
+				l.Get(host, "a")
+				l.Get(host, "b")
 			}
 		}()
 	}
 	wg.Wait()
+}
+
+// TestHostsDoNotShareEntries is the reason the key is (host, alias).
+//
+// One process serves several sites, and the same alias means different
+// things on each. Keyed by alias alone, whichever site was looked up
+// first wins and the other is served someone else's target: a wrong
+// redirect that appears nowhere in the logs, because from the server's
+// side it is a cache hit like any other.
+func TestHostsDoNotShareEntries(t *testing.T) {
+	l := NewLRU(true)
+
+	l.Put("changkun.de", "s", &models.Redir{
+		Host: "changkun.de", Alias: "s", URL: "https://changkun.de/target",
+	})
+
+	if _, ok := l.Get("golang.design", "s"); ok {
+		t.Fatal("golang.design/s/s hit the cache entry for changkun.de")
+	}
+
+	l.Put("golang.design", "s", &models.Redir{
+		Host: "golang.design", Alias: "s", URL: "https://golang.design/target",
+	})
+
+	for _, tt := range []struct{ host, want string }{
+		{"changkun.de", "https://changkun.de/target"},
+		{"golang.design", "https://golang.design/target"},
+	} {
+		v, ok := l.Get(tt.host, "s")
+		if !ok {
+			t.Fatalf("%v: alias missing from the cache", tt.host)
+		}
+		if v.URL != tt.want {
+			t.Fatalf("%v: URL = %q, want %q", tt.host, v.URL, tt.want)
+		}
+	}
+
+	if l.Len() != 2 {
+		t.Fatalf("cache holds %d entries, want 2", l.Len())
+	}
+}
+
+// TestKeyIsUnambiguous checks that two different (host, alias) pairs
+// cannot produce the same key by concatenation.
+func TestKeyIsUnambiguous(t *testing.T) {
+	if key("a", "b/c") == key("a/b", "c") {
+		t.Fatal("key collides when the separator appears in a component")
+	}
+	if key("changkun.de", "") == key("changkun.de", "x") {
+		t.Fatal("the index page shares a key with an alias")
+	}
 }

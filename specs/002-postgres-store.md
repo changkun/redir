@@ -364,8 +364,19 @@ Fused, an outage would have two candidate causes. This is the same reason
 ## Rollback
 
 Set `store` back to the `mongodb://` URI and restart. MongoDB has been
-running and unmodified throughout. The PostgreSQL data is left in place;
-re-running the migration needs `--truncate`.
+running and unmodified throughout, and deploying the binary before the
+cutover proved that this exact build serves traffic from it.
+
+Rollback is not free, and the cost grows with time. MongoDB stopped
+receiving writes at the cutover. **Links roll back intact; every visit
+recorded since the cutover exists only in PostgreSQL and would be
+discarded.** The same gap that made the cutover need a write freeze
+applies in reverse, so a rollback that must keep those visits has to copy
+them back first.
+
+The PostgreSQL data is left in place. Re-running the whole migration
+needs `-truncate`; `-only links` replaces a host's links on their own,
+inside one transaction, without touching the visit history.
 
 ## Outcome
 

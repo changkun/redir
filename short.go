@@ -170,7 +170,7 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 
 	// Figure out redirect location
 	host := config.Conf.ResolveHost(r.Host)
-	red, ok := s.cache.Get(alias)
+	red, ok := s.cache.Get(host, alias)
 	if !ok {
 		red, err = s.checkdb(ctx, host, alias)
 		if err != nil {
@@ -179,7 +179,7 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		s.cache.Put(alias, red)
+		s.cache.Put(host, alias, red)
 	}
 
 	// Send a wait page if time does not permitting

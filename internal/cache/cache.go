@@ -66,12 +66,24 @@ func (l *LRU) Len() uint {
 	return l.size
 }
 
-// Get returns the cached redirect for k and promotes it to the front.
-// The promotion writes to the list, so this takes the write lock.
-func (l *LRU) Get(k string) (*models.Redir, bool) {
+// key identifies a cached redirect.
+//
+// A link is (host, alias), not alias: one process serves several sites
+// and the same alias means different things on each. Caching by alias
+// alone would serve whichever site's target was looked up first, and the
+// wrong redirect would not appear in any log.
+func key(host, alias string) string {
+	return host + "\x00" + alias
+}
+
+// Get returns the cached redirect for an alias on a host and promotes it
+// to the front. The promotion writes to the list, so this takes the write
+// lock.
+func (l *LRU) Get(host, alias string) (*models.Redir, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	k := key(host, alias)
 	for e := l.elems.Front(); e != nil; e = e.Next() {
 		if e.Value.(*item).k == k {
 			l.elems.MoveToFront(e)
@@ -81,9 +93,11 @@ func (l *LRU) Get(k string) (*models.Redir, bool) {
 	return nil, false
 }
 
-func (l *LRU) Put(k string, v *models.Redir) {
+func (l *LRU) Put(host, alias string, v *models.Redir) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	k := key(host, alias)
 
 	// found from cache
 	i := &item{k: k, v: v}

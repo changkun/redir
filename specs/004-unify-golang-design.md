@@ -96,6 +96,16 @@ URL points at the import path, which is what it always was.
 | `created_by`, `updated_by` | `''` |
 | `time` | `created_at` |
 
+### The cache must be keyed by host first
+
+Fixed in 002 rather than left here, because 002 is where the store became
+host-aware while the cache above it was not. `short.go` consults the LRU
+before it reaches the store, and the cache keyed entries by alias alone.
+With one site that is invisible; the moment this spec adds a second, an
+alias present on both would serve whichever target was looked up first,
+and the wrong redirect would appear in no log, because from the server's
+side it is an ordinary cache hit.
+
 ### One process, two hosts
 
 `host` is already taken from the request (`002`), so serving both is a
