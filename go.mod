@@ -4,8 +4,6 @@ go 1.27.0
 
 require (
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/mileusna/useragent v1.3.5
-	github.com/yuin/goldmark v1.8.5
 	gopkg.in/yaml.v3 v3.0.1
 	latere.ai/x/pkg v0.44.0
 )

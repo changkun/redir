@@ -7,8 +7,6 @@ package models
 import (
 	"net/url"
 	"strings"
-
-	"github.com/mileusna/useragent"
 )
 
 // Derive fills the columns computed from UA and Referer.
@@ -24,7 +22,7 @@ import (
 func (v *Visit) Derive() {
 	v.RefererHost = refererHost(v.Referer)
 
-	ua := useragent.Parse(v.UA)
+	ua := parseUA(v.UA)
 	v.IsBot = ua.Bot || isBot(ua, v.UA)
 	v.Browser = ua.Name
 	v.OS = ua.OS
@@ -41,19 +39,22 @@ var httpClients = map[string]bool{
 	"Java": true, "aiohttp": true, "Guzzle": true, "lychee": true,
 }
 
-// botMarkers are substrings that identify automated traffic the parser
-// misses. BingPreview is the case that motivated this: it announces itself
+// botMarkers are substrings that identify automated traffic.
+//
+// "crawl" rather than "crawler", because an agent announcing itself as
+// "crawled for <url>" is one too. BingPreview is the case that motivated this: it announces itself
 // as a desktop Windows browser and contains neither "bot" nor "crawler",
 // so both the parser and the dashboard's old strings.Contains(ua, "bot")
 // test counted it as a person.
 var botMarkers = []string{
-	"bot", "crawler", "spider", "scraper", "scan", "slurp", "preview",
+	"bot", "crawl", "spider", "scraper", "scan", "slurp", "preview",
 	"monitor", "uptime", "validator", "archive", "headless", "feedfetcher",
+	"httrack", "wget", "fetcher", "sitecheck",
 }
 
 // isBot supplements the parser rather than replacing it. The parser is
 // right about what it does flag; it is only incomplete.
-func isBot(ua useragent.UserAgent, raw string) bool {
+func isBot(ua agent, raw string) bool {
 	if httpClients[ua.Name] {
 		return true
 	}
@@ -63,23 +64,23 @@ func isBot(ua useragent.UserAgent, raw string) bool {
 			return true
 		}
 	}
-	return namedButPlatformless(ua)
+	return platformless(raw, ua)
 }
 
-// namedButPlatformless catches agents that identify themselves but claim
-// no platform, such as "Mozilla/5.0 (compatible; Dataprovider.com)".
+// platformless catches agents that claim no platform, such as
+// "Mozilla/5.0 (compatible; Dataprovider.com)" or a bare "Mozilla/5.0".
 //
-// A browser runs on something, and the parser recognises every platform a
-// browser reports. An agent that gives a name while reporting no
-// operating system and no device is announcing a tool, not a person, and
-// it is the shape every crawler too obscure to be in a list arrives in.
-// Matching on the shape rather than on names means the next one is caught
-// without an edit.
+// A browser runs on something, and every platform a browser reports is
+// recognised. An agent that names no operating system and no device is
+// announcing a tool, not a person, and it is the shape every crawler too
+// obscure to be in a list arrives in. Matching on the shape rather than
+// on names means the next one is caught without an edit.
 //
-// The name must be present: an empty user agent says nothing either way
-// and is left alone.
-func namedButPlatformless(ua useragent.UserAgent) bool {
-	return ua.Name != "" && ua.OS == "" &&
+// An empty user agent is excluded. It says nothing either way, and
+// treating silence as evidence would reclassify 16,007 recorded visits on
+// no information at all.
+func platformless(raw string, ua agent) bool {
+	return raw != "" && ua.OS == "" &&
 		!ua.Mobile && !ua.Tablet && !ua.Desktop
 }
 
@@ -104,7 +105,7 @@ func refererHost(ref string) string {
 // It takes the decided bot flag rather than reading ua.Bot, so a crawler
 // that announces itself as a desktop browser, which several do, does not
 // end up counted as a desktop.
-func deviceKind(ua useragent.UserAgent, bot bool) string {
+func deviceKind(ua agent, bot bool) string {
 	switch {
 	case bot:
 		return "bot"

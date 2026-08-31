@@ -5,7 +5,6 @@
 package config
 
 import (
-	"bytes"
 	"cmp"
 	_ "embed"
 	"log"
@@ -14,10 +13,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
 	"gopkg.in/yaml.v3"
 )
 
@@ -76,11 +71,18 @@ type config struct {
 			Email  string `yaml:"email"`
 		} `yaml:"contact"`
 		Impressum struct {
-			Enable  bool   `yaml:"enable"`
+			Enable bool `yaml:"enable"`
+			// Content is HTML, rendered into the page as it is. It was
+			// markdown converted at start up, which meant carrying a
+			// markdown library to render two static documents that
+			// change once a year. The renderer had unsafe HTML enabled,
+			// so the field was already trusted input and this changes
+			// nothing about who may write it.
 			Content string `yaml:"content"`
 		} `yaml:"impressum"`
 		Privacy struct {
-			Enable  bool   `yaml:"enable"`
+			Enable bool `yaml:"enable"`
+			// Content is HTML; see Impressum.Content.
 			Content string `yaml:"content"`
 		} `yaml:"privacy"`
 	} `yaml:"gdpr"`
@@ -221,17 +223,6 @@ func (c *config) parse() {
 			c.Auth.Enable, None, Basic, Latere)
 	}
 
-	var buf bytes.Buffer
-	if err := md.Convert([]byte(Conf.GDPR.Impressum.Content), &buf); err != nil {
-		log.Fatalf("cannot parse impressum markdown content: %v\n", err)
-	}
-	Conf.GDPR.Impressum.Content = buf.String()
-	buf.Reset()
-
-	if err := md.Convert([]byte(Conf.GDPR.Privacy.Content), &buf); err != nil {
-		log.Fatalf("cannot parse privacy markdown content: %v\n", err)
-	}
-	Conf.GDPR.Privacy.Content = buf.String()
 }
 
 var Conf config
@@ -239,15 +230,3 @@ var Conf config
 func init() {
 	Conf.parse()
 }
-
-var md = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
-	goldmark.WithParserOptions(
-		parser.WithAutoHeadingID(),
-	),
-	goldmark.WithRendererOptions(
-		html.WithHardWraps(),
-		html.WithXHTML(),
-		html.WithUnsafe(),
-	),
-)
