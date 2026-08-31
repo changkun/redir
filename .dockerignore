@@ -2,8 +2,7 @@
 build
 redir
 coverage.txt
-data/mongo
-data/redis
+data
 dashboard/node_modules
 dashboard/build
 .env

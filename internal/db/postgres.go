@@ -27,9 +27,8 @@ type pgStore struct {
 	pool *pgxpool.Pool
 }
 
-// ErrAliasExists reports that (host, alias) is taken. It replaces the
-// MongoDB backend's bare "alias already existed" string, which callers
-// could only match on by comparing text.
+// ErrAliasExists reports that (host, alias) is taken, so a caller can
+// tell "already there" from "broken" without matching on message text.
 var ErrAliasExists = errors.New("alias already existed")
 
 // uniqueViolation is the SQLSTATE for a unique constraint breach.
@@ -46,9 +45,8 @@ func newPostgresStore(ctx context.Context, uri string) (*pgStore, error) {
 	// time is timestamptz, and date_trunc on a timestamptz truncates in
 	// the session's time zone, so the hourly buckets StatVisitHist
 	// returns would shift with a server setting nothing in this
-	// repository controls. The MongoDB pipelines truncate in UTC
-	// unconditionally, and the instance is shared with another service,
-	// so this is set here rather than assumed.
+	// repository controls. The instance is shared with another service,
+	// so the zone is set here rather than assumed.
 	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -77,10 +75,10 @@ func (db *pgStore) Close() error {
 }
 
 func (db *pgStore) StoreAlias(ctx context.Context, r *models.Redir) error {
-	// valid_from is stored as given, including the zero value. The
-	// MongoDB backend does the same, and short.go treats a zero time as
-	// "valid since always"; substituting the current time here would
-	// make it "valid from now", which is a different link.
+	// valid_from is stored as given, including the zero value. short.go
+	// treats a zero time as "valid since always"; substituting the
+	// current time here would make it "valid from now", which is a
+	// different link.
 	now := time.Now().UTC()
 
 	var id int64
@@ -166,15 +164,11 @@ func (db *pgStore) FetchAlias(ctx context.Context, host, alias string) (*models.
 
 // FetchAliasAll returns a page of links.
 //
-// The public form omits the URL and the counts, as the MongoDB backend
-// does, so that the public index cannot be used to enumerate targets or to
-// read traffic figures.
+// The public form omits the URL and the counts, so that the public index
+// cannot be used to enumerate targets or to read traffic figures.
 //
-// The counts come from a LEFT JOIN, so a link with no visits reports
-// pv=0, uv=0. MongoDB reports pv=1, uv=1 for that case, because
-// preserveNullAndEmptyArrays keeps a synthetic null row and the pipeline
-// counts it. Production has no such link, so the two agree there; where
-// they differ, this one is right.
+// The counts come from a LEFT JOIN, so a link nobody has visited reports
+// pv=0, uv=0 rather than being left out of the listing.
 func (db *pgStore) FetchAliasAll(
 	ctx context.Context,
 	host string,
@@ -281,9 +275,9 @@ func (db *pgStore) RecordVisit(ctx context.Context, v *models.Visit) (string, er
 //
 // The join to links is not decoration. 21% of the visit rows have an alias
 // that is not a link: the index page records an empty alias, and a visit
-// is recorded before the alias is resolved, so 404s are counted too. Every
-// MongoDB pipeline starts from links and looks the visits up, so it never
-// sees those rows. Querying visits alone would return different numbers.
+// is recorded before the alias is resolved, so 404s are counted too.
+// Querying visits alone would report all of them as traffic to aliases
+// that do not exist.
 const joinVisits = `
 	FROM links l
 	JOIN visits v ON v.host = l.host AND v.alias = l.alias
@@ -294,8 +288,9 @@ func (db *pgStore) StatReferer(
 	host, alias string,
 	start, end time.Time,
 ) ([]models.RefStat, error) {
-	// The empty referer is reported as "unknown" because that is the
-	// string the MongoDB pipeline invents and the dashboard matches on.
+	// The empty referer is reported as "unknown" because the dashboard
+	// matches that exact string to label a visit as direct. Both sides
+	// change together; see specs/003-enriched-stats.md.
 	rows, err := db.pool.Query(ctx, `
 		SELECT CASE WHEN v.referer = '' THEN 'unknown' ELSE v.referer END AS referer,
 		       COUNT(*) AS count`+joinVisits+`
@@ -347,8 +342,7 @@ func (db *pgStore) StatUA(
 	return rs, nil
 }
 
-// StatVisitHist buckets by hour, which is what the MongoDB pipeline does
-// by grouping on year, month, day and hour.
+// StatVisitHist buckets by hour.
 func (db *pgStore) StatVisitHist(
 	ctx context.Context,
 	host, alias string,
@@ -380,10 +374,10 @@ func (db *pgStore) StatVisitHist(
 
 // StatVisit counts PV and UV for the given aliases.
 //
-// UV is a distinct count over ip, not over visitor_id. The cookie carrying
-// visitor_id has no Max-Age and RecordVisit mints one whenever a request
-// arrives without it, so 277,318 of 348,356 production visits invented a
-// visitor. It counts visits, not people.
+// UV is a distinct count over ip, not over visitor_id. The cookie
+// carrying visitor_id is a session cookie and RecordVisit mints one
+// whenever a request arrives without it, so 277,318 of 348,356 recorded
+// visits invented a visitor. It counts visits, not people.
 func (db *pgStore) StatVisit(
 	ctx context.Context,
 	host string,

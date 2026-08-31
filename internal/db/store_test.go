@@ -74,11 +74,6 @@ func reset(ctx context.Context, t testing.TB) {
 }
 
 // run executes fn against a freshly seeded store.
-//
-// This used to fan out over two backends, so that the PostgreSQL port
-// could be checked against the MongoDB original. That comparison did its
-// job and the MongoDB backend is gone; the behaviours it established are
-// asserted here on their own terms.
 func run(t *testing.T, fn func(t *testing.T, s db.Store)) {
 	t.Helper()
 	ctx := context.Background()
@@ -278,10 +273,10 @@ func TestOrphanVisitsAreNotCounted(t *testing.T) {
 	})
 }
 
-// TestZeroVisitAliasCountsZero pins the one place the backends disagree.
-// MongoDB keeps a synthetic null row after its lookup and reports pv=1,
-// uv=1 for an alias nobody visited. Production has no such alias, so the
-// migration compares equal; where they differ, zero is right.
+// TestZeroVisitAliasCountsZero checks that an alias nobody has visited
+// reports no traffic rather than one phantom visit. The counts come from
+// a LEFT JOIN, so the link is listed with zeroes instead of being either
+// dropped or credited with a row that does not exist.
 func TestZeroVisitAliasCountsZero(t *testing.T) {
 	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
@@ -379,8 +374,9 @@ func TestStatRefererAndUA(t *testing.T) {
 	})
 }
 
-// TestStatRangeExcludesEnd checks the half-open range the MongoDB
-// pipelines use: time >= start and time < end.
+// TestStatRangeExcludesEnd checks the range is half-open: time >= start
+// and time < end. Adjacent days must not both count a visit on their
+// shared boundary.
 func TestStatRangeExcludesEnd(t *testing.T) {
 	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
@@ -428,9 +424,8 @@ func BenchmarkFetchAliasAll(b *testing.B) {
 //
 // time is timestamptz and date_trunc truncates in the session time zone,
 // so an instance configured for another zone would shift every bucket.
-// The MongoDB pipelines truncate in UTC unconditionally. The store sets
-// the session zone rather than inheriting it, and this asks for the
-// opposite zone in the URI to prove the setting wins.
+// The store sets the session zone rather than inheriting it, and this
+// asks for another zone in the URI to prove the setting wins.
 func TestHistBucketsAreUTC(t *testing.T) {
 	ctx := context.Background()
 

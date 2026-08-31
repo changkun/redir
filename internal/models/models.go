@@ -86,7 +86,7 @@ type UAStat struct {
 
 // TimeHist statistics
 type TimeHist struct {
-	Time time.Time `bson:"time" json:"time"`
-	PV   int       `bson:"pv"   json:"pv"`
-	UV   int       `bson:"uv"   json:"uv"`
+	Time time.Time `json:"time"`
+	PV   int       `json:"pv"`
+	UV   int       `json:"uv"`
 }

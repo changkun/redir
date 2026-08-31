@@ -444,5 +444,5 @@ silently. A cutover should either freeze writes or re-copy the delta.
 - Changing what any number means, including the UV metric: `003`.
 - Removing `ua-parser-js` from the dashboard: `003`.
 - The golang.design deployment: `004`.
-- Dropping MongoDB. It stays until PostgreSQL has run unattended for a
-  period the operator judges sufficient.
+- Dropping MongoDB. Done separately in `005-drop-mongodb.md`, once this
+  spec's verification had passed.

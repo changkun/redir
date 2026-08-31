@@ -68,8 +68,7 @@ func NewStore(ctx context.Context, uri string) (Store, error) {
 	case "mongodb", "mongodb+srv":
 		// Whoever sees this is part way through a rollback, so the
 		// message says where the way back is rather than only what is
-		// wrong. redir served MongoDB until v0.7.0, which is the last
-		// release that speaks both. See specs/005-drop-mongodb.md.
+		// wrong. See specs/005-drop-mongodb.md.
 		return nil, fmt.Errorf(
 			"the MongoDB backend was removed after v0.7.0: check out "+
 				"v0.7.0 and rebuild to use %q, or point the store at postgres://",

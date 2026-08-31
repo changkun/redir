@@ -37,8 +37,7 @@ func TestNewStoreScheme(t *testing.T) {
 }
 
 // TestRedact keeps database credentials out of logs and error messages.
-// The store URI used to be logged whole, which was harmless for the
-// MongoDB URI and leaks the password for the PostgreSQL one.
+// The store URI used to be logged whole, which discloses the password.
 func TestRedact(t *testing.T) {
 	for _, tt := range []struct{ in, wantAbsent, wantPresent string }{
 		{
@@ -243,10 +242,10 @@ func TestFetchAliasAllPaging(t *testing.T) {
 	})
 }
 
-// TestStatVisitHistBothBackends exercises the hourly histogram on both
-// stores. The MongoDB pipeline behind it is elaborate and no test covered
-// it before.
-func TestStatVisitHistBothBackends(t *testing.T) {
+// TestStatVisitHistBuckets checks the hourly histogram: repeat visits
+// from one address raise PV without raising UV, and visits in different
+// hours land in different buckets.
+func TestStatVisitHistBuckets(t *testing.T) {
 	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
@@ -344,9 +343,9 @@ func TestNewStoreUnreachable(t *testing.T) {
 }
 
 // TestMongoURINamesTheWayBack checks the error a mongodb:// store URI
-// gets. Whoever reads it is part way through a rollback, so it must say
-// which release still speaks MongoDB rather than only that the scheme is
-// unknown.
+// gets. Whoever reads it is part way through a rollback, so it must name
+// the release to return to rather than only report an unknown scheme.
+// This is the one place the old backend is still mentioned on purpose.
 func TestMongoURINamesTheWayBack(t *testing.T) {
 	ctx := context.Background()
 	for _, uri := range []string{
@@ -564,10 +563,9 @@ func TestCancelledContextIsAnError(t *testing.T) {
 	})
 }
 
-// TestRedactedURIReachesTheUsageText guards the command's help output.
-// It prints the configured store address, which was harmless when that
-// was a MongoDB URI and prints the password now that it is a PostgreSQL
-// one. Anyone running `redir -h` on the deploy host would see it.
+// TestRedactedURIReachesTheUsageText guards the command's help output,
+// which prints the configured store address. Without redaction anyone
+// running `redir -h` on the deploy host sees the database password.
 func TestRedactedURIReachesTheUsageText(t *testing.T) {
 	const uri = "postgres://redir:s3cret@postgres:5432/redir?sslmode=disable"
 	got := db.Redact(uri)

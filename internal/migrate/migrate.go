@@ -5,14 +5,13 @@
 // Package migrate loads links and visits from an older store into
 // PostgreSQL.
 //
-// It was written to carry redir's data off MongoDB, and the MongoDB
-// reader is gone with the rest of that backend. What remains is the half
-// that was never MongoDB-specific: batched loading, the rules about which
-// values may be discarded and which must be carried unchanged, and the
-// count check that decides whether a migration worked.
+// A Source supplies the rows; this package owns everything after that:
+// batched loading, the rules about which values may be discarded and
+// which must be carried unchanged, and the count check that decides
+// whether a migration worked.
 //
-// A Source supplies the rows. See specs/004-unify-golang-design.md, which
-// adds one over the SQLite database of the golang.design deployment.
+// See specs/004-unify-golang-design.md, which adds a Source over the
+// SQLite database of the golang.design deployment.
 package migrate
 
 import (
@@ -55,6 +54,8 @@ type Link struct {
 // VisitorID is a string rather than a UUID because a source may hold
 // anything there: redir stored the visitor cookie verbatim before it was
 // validated, so the column collected scanner probes.
+//
+// Alias may be empty: that is how the index page is recorded.
 type Visit struct {
 	VisitorID string
 	Alias     string
@@ -303,6 +304,9 @@ func copyVisits(
 // cookie verbatim before it was validated, so 505 rows held scanner
 // probes and 10,708 held nothing at all. An absent identifier is honest;
 // an invented one is not.
+//
+// This is the same rule as keep: drop what cannot be read, never replace
+// it with something plausible.
 func VisitorID(s string) *uuid.UUID {
 	id, err := uuid.Parse(s)
 	if err != nil {
@@ -326,12 +330,12 @@ func sanitize(s string) string {
 
 // keep returns the stored timestamp unchanged.
 //
-// It does not substitute the current time for a missing one. When redir
-// moved off MongoDB, 124 links had no valid_from, 131 no created_at and
-// 106 no updated_at, and the zero value is meaningful: valid_from gates
-// the redirect, so "always valid" must not become "valid from the day of
-// the migration", and updated_at orders the admin index, which stamping
-// every undated link with one instant would scramble.
+// It does not substitute the current time for a missing one. In redir's
+// own data 124 links had no valid_from, 131 no created_at and 106 no
+// updated_at, and the zero value is meaningful: valid_from gates the
+// redirect, so "always valid" must not become "valid from the day of the
+// migration", and updated_at orders the admin index, which stamping every
+// undated link with one instant would scramble.
 //
 // A migration may drop a value it cannot parse. It may never replace one
 // with a plausible substitute.

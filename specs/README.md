@@ -5,16 +5,16 @@ own; larger work is split rather than fused.
 
 ## Postgres migration
 
-redir stores short links and visit records in MongoDB. It is moving to
+redir stored short links and visit records in MongoDB. It now runs on
 PostgreSQL, reusing the instance that [urlstat](https://github.com/changkun/urlstat)
 already runs on the same host rather than adding a second database
-container. The move is split into four specs so that a failure in any one
-of them has a single possible cause.
+container. The move was split so that a failure in any one step had a
+single possible cause.
 
-The split between 002 and 003 is deliberate. 002 changes the storage and
-keeps every number identical, so its verification is a diff that must come
-out empty. 003 changes what the numbers mean. Fused, a mismatch would have
-two candidate causes and neither could be ruled out.
+The split between 002 and 003 is deliberate. 002 changed the storage and
+kept every number identical, so its verification was a diff that had to
+come out empty. 003 changes what the numbers mean. Fused, a mismatch
+would have had two candidate causes and neither could be ruled out.
 
 | Spec | Status | Deliverable |
 | --- | --- | --- |
