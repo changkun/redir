@@ -1,6 +1,6 @@
 ---
 title: PostgreSQL store
-status: planned
+status: in progress
 depends_on:
   - 001-shared-postgres
 affects:
