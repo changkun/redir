@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"changkun.de/x/redir/internal/config"
+	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/version"
@@ -46,7 +47,7 @@ Command line usage:
 $ redir [-s] [-f <file>] [-d <file>] [-op <operator> -a <alias> -l <link> -p -t -vt <time>]
 
 options:
-`, config.Conf.Store, version.Version, runtime.Version())
+`, db.Redact(config.Conf.Store), version.Version, runtime.Version())
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, `
 examples:

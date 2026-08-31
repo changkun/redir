@@ -36,7 +36,7 @@ The `redir` command offers server side operation feature from shell:
 $ redir
 
 redir is a featured URL shortener. The redir server (run via '-s' option),
-will connect to the default database address mongodb://localhost:27018.
+will connect to the default database address postgres://redir:xxxxx@localhost:5432/redir?sslmode=disable.
 It is possible to reconfig redir using an external configuration file.
 See https://changkun.de/s/redir for more details.
 

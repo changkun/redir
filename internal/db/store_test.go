@@ -14,8 +14,6 @@ import (
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/models"
 	"github.com/jackc/pgx/v5"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
@@ -23,46 +21,27 @@ const (
 	khost  = "test.example"
 )
 
-// backend is one store implementation under test.
-//
-// Both backends run the same tests, because the point of the migration is
-// that they behave the same. A test that only runs against PostgreSQL
-// proves the new store works, not that it replaces the old one.
-type backend struct {
-	name string
-	uri  string
-	// multiHost reports whether the backend keys links by host. MongoDB
-	// predates the host column and serves one site, so the tests that
-	// separate two hosts do not apply to it.
-	multiHost bool
-}
-
-func backends() []backend {
-	pg := os.Getenv("REDIR_TEST_POSTGRES")
-	if pg == "" {
-		pg = "postgres://redir:redir@127.0.0.1:5432/redir_test?sslmode=disable"
+// storeURI names the database the store tests run against. They run
+// against a real PostgreSQL rather than a mock: the queries are the thing
+// under test, and a mock would only assert that they were called.
+func storeURI() string {
+	if uri := os.Getenv("REDIR_TEST_POSTGRES"); uri != "" {
+		return uri
 	}
-	mongo := os.Getenv("REDIR_TEST_MONGO")
-	if mongo == "" {
-		mongo = "mongodb://0.0.0.0:27018"
-	}
-	return []backend{
-		{name: "postgres", uri: pg, multiHost: true},
-		{name: "mongo", uri: mongo},
-	}
+	return "postgres://redir:redir@127.0.0.1:5432/redir_test?sslmode=disable"
 }
 
 // open connects, empties the store and seeds one public alias, so every
 // test starts from a known state rather than from whatever the local
 // database happens to hold.
-func (b backend) open(ctx context.Context, t testing.TB) db.Store {
+func open(ctx context.Context, t testing.TB) db.Store {
 	t.Helper()
 
-	s, err := db.NewStore(ctx, b.uri)
+	s, err := db.NewStore(ctx, storeURI())
 	if err != nil {
-		t.Skipf("cannot connect to %v store: %v", b.name, err)
+		t.Skipf("cannot connect to store: %v", err)
 	}
-	b.reset(ctx, t)
+	reset(ctx, t)
 
 	err = s.StoreAlias(ctx, &models.Redir{
 		Host:    khost,
@@ -80,46 +59,34 @@ func (b backend) open(ctx context.Context, t testing.TB) db.Store {
 
 // reset empties the store. The tests count rows, so leftovers from an
 // earlier run would make them pass or fail for the wrong reason.
-func (b backend) reset(ctx context.Context, t testing.TB) {
+func reset(ctx context.Context, t testing.TB) {
 	t.Helper()
 
-	if b.name == "postgres" {
-		conn, err := pgx.Connect(ctx, b.uri)
-		if err != nil {
-			t.Skipf("cannot connect to postgres: %v", err)
-		}
-		defer conn.Close(ctx)
-		if _, err := conn.Exec(ctx,
-			`TRUNCATE links, visits RESTART IDENTITY`); err != nil {
-			t.Fatalf("cannot reset postgres: %v", err)
-		}
-		return
-	}
-
-	cli, err := mongo.Connect(ctx, options.Client().ApplyURI(b.uri).
-		SetServerSelectionTimeout(5*time.Second))
+	conn, err := pgx.Connect(ctx, storeURI())
 	if err != nil {
-		t.Skipf("cannot connect to mongo: %v", err)
+		t.Skipf("cannot connect to postgres: %v", err)
 	}
-	defer cli.Disconnect(ctx) //nolint:errcheck // best effort in a test
-	if err := cli.Database("redir").Drop(ctx); err != nil {
-		t.Fatalf("cannot reset mongo: %v", err)
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx,
+		`TRUNCATE links, visits RESTART IDENTITY`); err != nil {
+		t.Fatalf("cannot reset postgres: %v", err)
 	}
 }
 
-// run executes fn against every reachable backend.
-func run(t *testing.T, fn func(t *testing.T, b backend, s db.Store)) {
+// run executes fn against a freshly seeded store.
+//
+// This used to fan out over two backends, so that the PostgreSQL port
+// could be checked against the MongoDB original. That comparison did its
+// job and the MongoDB backend is gone; the behaviours it established are
+// asserted here on their own terms.
+func run(t *testing.T, fn func(t *testing.T, s db.Store)) {
 	t.Helper()
-	for _, b := range backends() {
-		t.Run(b.name, func(t *testing.T) {
-			ctx := context.Background()
-			fn(t, b, b.open(ctx, t))
-		})
-	}
+	ctx := context.Background()
+	fn(t, open(ctx, t))
 }
 
 func TestStoreAliasRejectsDuplicate(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		err := s.StoreAlias(ctx, &models.Redir{
 			Host: khost, Alias: kalias, URL: "other",
@@ -144,7 +111,7 @@ func TestStoreAliasRejectsDuplicate(t *testing.T) {
 }
 
 func TestUpdateAlias(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		const want = "link2"
 
@@ -171,7 +138,7 @@ func TestUpdateAlias(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		if err := s.DeleteAlias(ctx, khost, kalias); err != nil {
 			t.Fatal(err)
@@ -183,7 +150,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFetchAliasAll(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		rs, total, err := s.FetchAliasAll(ctx, khost, true, 20, 1)
 		if err != nil {
@@ -202,7 +169,7 @@ func TestFetchAliasAll(t *testing.T) {
 }
 
 func TestRecordVisitAndCount(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 
@@ -237,10 +204,7 @@ func TestRecordVisitAndCount(t *testing.T) {
 // "-1%20OR%202%2B471-471-1=0%2B0%2B0%2B1%20--%20" were recorded as visitor
 // identifiers.
 func TestRecordVisitRejectsNonUUIDCookie(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("MongoDB backend predates cookie validation")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 
 		const probe = `-1%20OR%202%2B471-471-1=0%2B0%2B0%2B1%20--%20`
@@ -279,10 +243,7 @@ func TestRecordVisitRejectsNonUUIDCookie(t *testing.T) {
 // the alias is resolved, so 404s are counted. Querying visits alone would
 // report them.
 func TestOrphanVisitsAreNotCounted(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("host separation does not apply to the MongoDB backend")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 
@@ -322,10 +283,7 @@ func TestOrphanVisitsAreNotCounted(t *testing.T) {
 // uv=1 for an alias nobody visited. Production has no such alias, so the
 // migration compares equal; where they differ, zero is right.
 func TestZeroVisitAliasCountsZero(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("known MongoDB behaviour, see the comment above")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		rs, err := s.StatVisit(ctx, khost, []string{kalias})
 		if err != nil {
@@ -344,10 +302,7 @@ func TestZeroVisitAliasCountsZero(t *testing.T) {
 // TestHostsAreSeparate is the property 004 depends on: the same alias on
 // two sites is two links with two histories.
 func TestHostsAreSeparate(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("the MongoDB backend serves one host")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		const other = "other.example"
 
@@ -382,7 +337,7 @@ func TestHostsAreSeparate(t *testing.T) {
 }
 
 func TestStatRefererAndUA(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 
@@ -427,10 +382,7 @@ func TestStatRefererAndUA(t *testing.T) {
 // TestStatRangeExcludesEnd checks the half-open range the MongoDB
 // pipelines use: time >= start and time < end.
 func TestStatRangeExcludesEnd(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("covered for the store that serves traffic")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		end := start.Add(2 * time.Hour)
@@ -461,8 +413,7 @@ func TestStatRangeExcludesEnd(t *testing.T) {
 
 func BenchmarkFetchAliasAll(b *testing.B) {
 	ctx := context.Background()
-	be := backends()[0]
-	s := be.open(ctx, b)
+	s := open(ctx, b)
 
 	b.ReportAllocs()
 	for b.Loop() {
@@ -482,9 +433,8 @@ func BenchmarkFetchAliasAll(b *testing.B) {
 // opposite zone in the URI to prove the setting wins.
 func TestHistBucketsAreUTC(t *testing.T) {
 	ctx := context.Background()
-	b := backends()[0]
 
-	uri := b.uri
+	uri := storeURI()
 	if strings.Contains(uri, "?") {
 		uri += "&timezone=Asia/Kolkata"
 	} else {
@@ -495,7 +445,7 @@ func TestHistBucketsAreUTC(t *testing.T) {
 		t.Skipf("cannot connect to postgres: %v", err)
 	}
 	defer s.Close()
-	b.reset(ctx, t)
+	reset(ctx, t)
 
 	if err := s.StoreAlias(ctx, &models.Redir{
 		Host: khost, Alias: kalias, URL: "link",

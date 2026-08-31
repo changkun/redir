@@ -16,14 +16,14 @@ import (
 
 // Store is the persistence redir runs on.
 //
-// Two backends implement it. PostgreSQL is the one that serves traffic;
-// MongoDB is kept so that a rollback is a change to the store URI and a
-// restart, with no rebuild and no data movement.
+// It has one implementation, over PostgreSQL. The interface stays because
+// it is the seam the handler tests substitute, so recording a visit and
+// setting its cookie can be tested without a database.
 //
 // A link is identified by the pair (host, alias): one process serves
 // several hosts and the same alias means different things on each. Methods
 // that take a whole model read the host from it; the others take it as an
-// argument. The MongoDB backend has no host column and ignores it.
+// argument.
 type Store interface {
 	// Close releases the connection.
 	Close() error
@@ -55,30 +55,33 @@ type Store interface {
 	StatVisit(ctx context.Context, host string, aliases []string) ([]models.VisitRecord, error)
 }
 
-// NewStore opens the store named by uri, choosing the backend from its
-// scheme. The scheme is the only rollback switch there is: pointing the
-// configuration back at a mongodb:// URI restores the previous store
-// without rebuilding the binary.
+// NewStore opens the store named by uri.
 func NewStore(ctx context.Context, uri string) (Store, error) {
 	scheme, _, ok := strings.Cut(uri, "://")
 	if !ok {
-		return nil, fmt.Errorf("store %q has no scheme, want postgres:// or mongodb://", Redact(uri))
+		return nil, fmt.Errorf("store %q has no scheme, want postgres://", Redact(uri))
 	}
 
 	switch scheme {
 	case "postgres", "postgresql":
 		return newPostgresStore(ctx, uri)
 	case "mongodb", "mongodb+srv":
-		return newMongoStore(ctx, uri)
+		// Whoever sees this is part way through a rollback, so the
+		// message says where the way back is rather than only what is
+		// wrong. redir served MongoDB until v0.7.0, which is the last
+		// release that speaks both. See specs/005-drop-mongodb.md.
+		return nil, fmt.Errorf(
+			"the MongoDB backend was removed after v0.7.0: check out "+
+				"v0.7.0 and rebuild to use %q, or point the store at postgres://",
+			scheme+"://")
 	default:
-		return nil, fmt.Errorf("unsupported store scheme %q, want postgres:// or mongodb://", scheme)
+		return nil, fmt.Errorf("unsupported store scheme %q, want postgres://", scheme)
 	}
 }
 
 // Redact removes the password from a store URI before it reaches a log
 // line or an error message, both of which are read by people who should
-// not be shown the database credentials. The MongoDB URI carried none, so
-// callers used to log it whole; the PostgreSQL one does.
+// not be shown the database credentials.
 func Redact(uri string) string {
 	u, err := url.Parse(uri)
 	if err != nil {

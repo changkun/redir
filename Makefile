@@ -28,14 +28,6 @@ $(GOOS): $(GOARCH)
 run:
 	./$(BINARY) -s
 
-# migrate copies the MongoDB data into PostgreSQL from inside the running
-# image, so the derived columns are written by the same code the server
-# uses. MONGO, POSTGRES and HOST come from the environment; add TRUNCATE=1
-# to replace what is already there.
-migrate:
-	docker compose -f docker/docker-compose.yml exec redir \
-		/app/redir-migrate -from "$(MONGO)" -to "$(POSTGRES)" \
-		-host "$(HOST)" $(if $(TRUNCATE),-truncate,) $(if $(DRYRUN),-dry-run,)
 dashboard:
 	cd dashboard && npm ci && npm run build
 build:
@@ -56,4 +48,4 @@ clean:
 	docker rmi -f $(shell docker images -f "dangling=true" -q) 2> /dev/null; true
 	docker rmi -f $(IMAGE):latest 2> /dev/null; true
 
-.PHONY: $(GOOS) $(GOARCH) run migrate dashboard build up down clean
+.PHONY: $(GOOS) $(GOARCH) run dashboard build up down clean

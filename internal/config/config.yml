@@ -9,10 +9,9 @@ host: https://changkun.de
 # won the lookup, leaving the reverse proxy unable to reach it.
 addr: :9123
 development: true
-# The scheme chooses the backend: postgres:// or mongodb://. PostgreSQL is
-# what redir runs on; the MongoDB store is kept so that a rollback is this
-# one line and a restart, with no rebuild. The schema is applied at start
-# up, so the database and its role are all that must exist beforehand.
+# The schema is applied at start up, so the database and its role are all
+# that must exist beforehand. redir stored its data in MongoDB until
+# v0.7.0, which is the last release that reads it.
 store: postgres://redir:redir@localhost:5432/redir?sslmode=disable
 cors: false
 s:

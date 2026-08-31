@@ -26,6 +26,21 @@ var migrationFS embed.FS
 // the same time must not both apply the same file.
 const migrateLockKey int64 = 0x7265646972 // "redir"
 
+// parseMigrationName splits a file name into its version and label. A
+// name that does not parse is an error rather than a file to skip: a
+// skipped migration leaves the schema incomplete and says nothing.
+func parseMigrationName(name string) (version int64, label string, ok bool) {
+	prefix, rest, found := strings.Cut(name, "_")
+	if !found {
+		return 0, "", false
+	}
+	v, err := strconv.ParseInt(prefix, 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	return v, rest, true
+}
+
 // migration is one numbered file from the migrations directory.
 type migration struct {
 	version int64
@@ -47,13 +62,11 @@ func loadMigrations() ([]migration, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
-		prefix, _, ok := strings.Cut(e.Name(), "_")
+		v, _, ok := parseMigrationName(e.Name())
 		if !ok {
-			return nil, fmt.Errorf("migration %v: want <version>_<name>.sql", e.Name())
-		}
-		v, err := strconv.ParseInt(prefix, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("migration %v: unparseable version: %w", e.Name(), err)
+			return nil, fmt.Errorf(
+				"migration %v: want <version>_<name>.sql with a numeric version",
+				e.Name())
 		}
 		b, err := migrationFS.ReadFile("migrations/" + e.Name())
 		if err != nil {

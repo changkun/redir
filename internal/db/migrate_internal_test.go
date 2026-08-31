@@ -199,3 +199,44 @@ func TestApplyMigrationRollsBack(t *testing.T) {
 		t.Error("the failing migration was recorded as applied")
 	}
 }
+
+// TestLoadMigrationsRejectsBadNames covers the naming rule. A file whose
+// version does not parse would otherwise be skipped in silence, leaving
+// the schema incomplete with nothing to say so.
+func TestLoadMigrationsRejectsBadNames(t *testing.T) {
+	for _, tt := range []struct{ name, file string }{
+		{"no separator", "initial.sql"},
+		{"unparseable version", "abc_initial.sql"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, ok := parseMigrationName(tt.file)
+			if ok {
+				t.Fatalf("parseMigrationName(%q) accepted a bad name", tt.file)
+			}
+		})
+	}
+	if v, _, ok := parseMigrationName("001_initial.sql"); !ok || v != 1 {
+		t.Fatalf("parseMigrationName rejected a good name: %v %v", v, ok)
+	}
+}
+
+// TestMigrateFailsWhenLockedOut checks that a failure to reach the
+// database is returned, not logged and stepped over: a store without its
+// schema must not serve traffic.
+func TestMigrateFailsOnClosedPool(t *testing.T) {
+	ctx := context.Background()
+
+	pool, err := pgxpool.New(ctx, testPostgresURI())
+	if err != nil {
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	pool.Close()
+
+	if err := migrate(ctx, pool); err == nil {
+		t.Fatal("migrate on a closed pool reported success")
+	}
+}

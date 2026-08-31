@@ -47,9 +47,9 @@ func TestRedact(t *testing.T) {
 			wantPresent: "postgres:5432/redir",
 		},
 		{
-			in:          "mongodb://0.0.0.0:27018",
+			in:          "postgres://0.0.0.0:5432/redir",
 			wantAbsent:  "@",
-			wantPresent: "0.0.0.0:27018",
+			wantPresent: "0.0.0.0:5432",
 		},
 		{
 			in:          "postgres://redir@postgres:5432/redir",
@@ -73,15 +73,14 @@ func TestRedact(t *testing.T) {
 // a migration that ran again would fail the boot.
 func TestMigrationsAreIdempotent(t *testing.T) {
 	ctx := context.Background()
-	b := backends()[0]
 
-	s1, err := db.NewStore(ctx, b.uri)
+	s1, err := db.NewStore(ctx, storeURI())
 	if err != nil {
 		t.Skipf("cannot connect to postgres: %v", err)
 	}
 	s1.Close()
 
-	conn, err := pgx.Connect(ctx, b.uri)
+	conn, err := pgx.Connect(ctx, storeURI())
 	if err != nil {
 		t.Skipf("cannot connect to postgres: %v", err)
 	}
@@ -96,7 +95,7 @@ func TestMigrationsAreIdempotent(t *testing.T) {
 		t.Fatal("no migration was recorded")
 	}
 
-	s2, err := db.NewStore(ctx, b.uri)
+	s2, err := db.NewStore(ctx, storeURI())
 	if err != nil {
 		t.Fatalf("reopening the store failed: %v", err)
 	}
@@ -113,7 +112,7 @@ func TestMigrationsAreIdempotent(t *testing.T) {
 }
 
 func TestUpdateAliasErrors(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 
 		if err := s.UpdateAlias(ctx, &models.Redir{
@@ -132,10 +131,7 @@ func TestUpdateAliasErrors(t *testing.T) {
 // TestUpdateAliasMissing checks that updating a link that is not there is
 // reported rather than silently doing nothing.
 func TestUpdateAliasMissing(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("identifier shape differs on the MongoDB backend")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		if err := s.UpdateAlias(ctx, &models.Redir{
 			ID: "999999", Host: khost, Alias: kalias, URL: "x",
@@ -148,10 +144,7 @@ func TestUpdateAliasMissing(t *testing.T) {
 // TestUpdateAliasRejectsCollision checks that renaming a link onto one
 // that exists is refused rather than losing one of them.
 func TestUpdateAliasRejectsCollision(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("the MongoDB backend has no uniqueness constraint")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 
 		if err := s.StoreAlias(ctx, &models.Redir{
@@ -176,7 +169,7 @@ func TestUpdateAliasRejectsCollision(t *testing.T) {
 // TestFetchAliasAllCounts covers the listing the admin dashboard reads,
 // which is the only place PV and UV appear next to a link.
 func TestFetchAliasAllCounts(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 
@@ -217,10 +210,7 @@ func TestFetchAliasAllCounts(t *testing.T) {
 // TestFetchAliasAllPaging checks that a second page returns different
 // links rather than repeating the first.
 func TestFetchAliasAllPaging(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
-		if !b.multiHost {
-			t.Skip("the MongoDB backend pages before its lookup, see specs/002")
-		}
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 
 		for _, a := range []string{"p1", "p2", "p3"} {
@@ -257,7 +247,7 @@ func TestFetchAliasAllPaging(t *testing.T) {
 // stores. The MongoDB pipeline behind it is elaborate and no test covered
 // it before.
 func TestStatVisitHistBothBackends(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
 
@@ -305,7 +295,7 @@ func TestStatVisitHistBothBackends(t *testing.T) {
 // does not exist returns nothing rather than failing, since the dashboard
 // can be pointed at a deleted link.
 func TestStatsOnUnknownAliasAreEmpty(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 		from, to := now.Add(-time.Hour), now.Add(time.Hour)
@@ -341,22 +331,40 @@ func TestNewStoreUnreachable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	for _, tt := range []struct{ name, uri string }{
-		{"postgres", "postgres://redir:redir@127.0.0.1:1/redir?sslmode=disable"},
-		{"mongo", "mongodb://127.0.0.1:1"},
+	const uri = "postgres://redir:redir@127.0.0.1:1/redir?sslmode=disable"
+	s, err := db.NewStore(ctx, uri)
+	if err == nil {
+		s.Close()
+		t.Fatal("NewStore succeeded against a closed port")
+	}
+	// The message reaches the logs, so it must not carry the password.
+	if strings.Contains(err.Error(), "redir:redir@") {
+		t.Errorf("error message leaked the password: %v", err)
+	}
+}
+
+// TestMongoURINamesTheWayBack checks the error a mongodb:// store URI
+// gets. Whoever reads it is part way through a rollback, so it must say
+// which release still speaks MongoDB rather than only that the scheme is
+// unknown.
+func TestMongoURINamesTheWayBack(t *testing.T) {
+	ctx := context.Background()
+	for _, uri := range []string{
+		"mongodb://redirdb:27017",
+		"mongodb+srv://user:pass@cluster.example/redir",
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			s, err := db.NewStore(ctx, tt.uri)
-			if err == nil {
-				s.Close()
-				t.Fatal("NewStore succeeded against a closed port")
-			}
-			// The message reaches the logs, so it must not carry the
-			// password.
-			if strings.Contains(err.Error(), "redir:redir@") {
-				t.Errorf("error message leaked the password: %v", err)
-			}
-		})
+		s, err := db.NewStore(ctx, uri)
+		if err == nil {
+			s.Close()
+			t.Fatalf("NewStore(%q) succeeded, want a refusal", uri)
+		}
+		if !strings.Contains(err.Error(), "v0.7.0") {
+			t.Errorf("NewStore(%q) error does not name the release to "+
+				"roll back to: %v", uri, err)
+		}
+		if strings.Contains(err.Error(), "pass") {
+			t.Errorf("error message leaked the password: %v", err)
+		}
 	}
 }
 
@@ -375,7 +383,7 @@ func TestRedactInvalid(t *testing.T) {
 // it was stored. short.go refuses to redirect a link whose valid_from is
 // in the future, and 124 production links carry the zero value.
 func TestZeroValidFromIsPreserved(t *testing.T) {
-	run(t, func(t *testing.T, b backend, s db.Store) {
+	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 
 		if err := s.StoreAlias(ctx, &models.Redir{
@@ -391,4 +399,182 @@ func TestZeroValidFromIsPreserved(t *testing.T) {
 			t.Fatalf("ValidFrom = %v, want the zero time", r.ValidFrom)
 		}
 	})
+}
+
+// TestDeleteAliasIsIdempotent checks that removing a link that is not
+// there is not an error. The admin path deletes by name, and a repeated
+// delete should not look like a failure.
+func TestDeleteAliasIsIdempotent(t *testing.T) {
+	run(t, func(t *testing.T, s db.Store) {
+		ctx := context.Background()
+		if err := s.DeleteAlias(ctx, khost, "never-existed"); err != nil {
+			t.Fatalf("deleting a missing alias failed: %v", err)
+		}
+		if err := s.DeleteAlias(ctx, khost, kalias); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.DeleteAlias(ctx, khost, kalias); err != nil {
+			t.Fatalf("deleting twice failed: %v", err)
+		}
+	})
+}
+
+// TestDeleteAliasKeepsVisits checks that a link's history outlives it.
+// The visits happened, the stats join links so they stop being counted,
+// and recreating the alias brings its history back.
+func TestDeleteAliasKeepsVisits(t *testing.T) {
+	run(t, func(t *testing.T, s db.Store) {
+		ctx := context.Background()
+		now := time.Now().UTC()
+
+		if _, err := s.RecordVisit(ctx, &models.Visit{
+			Host: khost, Alias: kalias, IP: "1.2.3.4", Time: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.DeleteAlias(ctx, khost, kalias); err != nil {
+			t.Fatal(err)
+		}
+
+		rs, err := s.StatVisit(ctx, khost, []string{kalias})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rs) != 0 {
+			t.Fatalf("StatVisit returned %+v for a deleted link, want none", rs)
+		}
+
+		if err := s.StoreAlias(ctx, &models.Redir{
+			Host: khost, Alias: kalias, URL: "https://example.com",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		rs, err = s.StatVisit(ctx, khost, []string{kalias})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rs) != 1 || rs[0].PV != 1 {
+			t.Fatalf("StatVisit = %+v after recreating the alias, want PV 1", rs)
+		}
+	})
+}
+
+// TestStatsAcrossHostsDoNotMix checks the stat queries filter by host,
+// not only the lookups.
+func TestStatsAcrossHostsDoNotMix(t *testing.T) {
+	run(t, func(t *testing.T, s db.Store) {
+		ctx := context.Background()
+		now := time.Now().UTC()
+		const other = "other.example"
+
+		if err := s.StoreAlias(ctx, &models.Redir{
+			Host: other, Alias: kalias, URL: "https://example.com",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.RecordVisit(ctx, &models.Visit{
+			Host: other, Alias: kalias, IP: "1.2.3.4",
+			UA: "curl/8.4.0", Referer: "https://example.com/x", Time: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		from, to := now.Add(-time.Hour), now.Add(time.Hour)
+		refs, err := s.StatReferer(ctx, khost, kalias, from, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(refs) != 0 {
+			t.Errorf("referer stats leaked across hosts: %+v", refs)
+		}
+		uas, err := s.StatUA(ctx, khost, kalias, from, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(uas) != 0 {
+			t.Errorf("ua stats leaked across hosts: %+v", uas)
+		}
+		hist, err := s.StatVisitHist(ctx, khost, kalias, from, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hist) != 0 {
+			t.Errorf("history leaked across hosts: %+v", hist)
+		}
+	})
+}
+
+// TestCancelledContextIsAnError checks that a request abandoned part way
+// through reports a failure rather than an empty result. The handlers
+// give every store call a deadline, so this is the path a slow query
+// takes, and an empty slice returned as success would render as an alias
+// with no traffic.
+func TestCancelledContextIsAnError(t *testing.T) {
+	run(t, func(t *testing.T, s db.Store) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		now := time.Now().UTC()
+		from, to := now.Add(-time.Hour), now.Add(time.Hour)
+
+		for name, call := range map[string]func() error{
+			"StatReferer": func() error {
+				_, err := s.StatReferer(ctx, khost, kalias, from, to)
+				return err
+			},
+			"StatUA": func() error {
+				_, err := s.StatUA(ctx, khost, kalias, from, to)
+				return err
+			},
+			"StatVisitHist": func() error {
+				_, err := s.StatVisitHist(ctx, khost, kalias, from, to)
+				return err
+			},
+			"StatVisit": func() error {
+				_, err := s.StatVisit(ctx, khost, []string{kalias})
+				return err
+			},
+			"FetchAliasAll": func() error {
+				_, _, err := s.FetchAliasAll(ctx, khost, false, 10, 1)
+				return err
+			},
+			"FetchAlias": func() error {
+				_, err := s.FetchAlias(ctx, khost, kalias)
+				return err
+			},
+			"DeleteAlias": func() error {
+				return s.DeleteAlias(ctx, khost, kalias)
+			},
+			"RecordVisit": func() error {
+				_, err := s.RecordVisit(ctx, &models.Visit{
+					Host: khost, Alias: kalias, IP: "1.2.3.4", Time: now,
+				})
+				return err
+			},
+			"StoreAlias": func() error {
+				return s.StoreAlias(ctx, &models.Redir{
+					Host: khost, Alias: "cancelled", URL: "https://example.com",
+				})
+			},
+		} {
+			if err := call(); err == nil {
+				t.Errorf("%v returned success on a cancelled context", name)
+			}
+		}
+	})
+}
+
+// TestRedactedURIReachesTheUsageText guards the command's help output.
+// It prints the configured store address, which was harmless when that
+// was a MongoDB URI and prints the password now that it is a PostgreSQL
+// one. Anyone running `redir -h` on the deploy host would see it.
+func TestRedactedURIReachesTheUsageText(t *testing.T) {
+	const uri = "postgres://redir:s3cret@postgres:5432/redir?sslmode=disable"
+	got := db.Redact(uri)
+	if strings.Contains(got, "s3cret") {
+		t.Fatalf("Redact(%q) = %q, still prints the password", uri, got)
+	}
+	if !strings.Contains(got, "postgres:5432/redir") {
+		t.Fatalf("Redact(%q) = %q, lost the address", uri, got)
+	}
 }
