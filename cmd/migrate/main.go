@@ -29,6 +29,7 @@ import (
 
 	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/migrate"
+	"changkun.de/x/redir/internal/migrate/sqlite"
 )
 
 func main() {
@@ -67,7 +68,7 @@ func main() {
 		os.Interrupt, os.Kill)
 	defer stop()
 
-	src, err := migrate.OpenSQLite(*from, after)
+	src, err := sqlite.Open(*from, after)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package migrate
+package sqlite
 
 import (
 	"context"
@@ -10,12 +10,19 @@ import (
 	"fmt"
 	"time"
 
+	"changkun.de/x/redir/internal/migrate"
+
 	// A pure Go driver, so the binary that runs the migration still
 	// builds with CGO disabled like the rest of the image.
+	//
+	// It lives in this package rather than in internal/migrate so that
+	// only the migration command links it. The server has no use for a
+	// SQLite driver, and importing migrate for -rederive pulled the
+	// driver and its libc emulation into the server binary.
 	_ "modernc.org/sqlite"
 )
 
-// SQLite reads the store of the redir fork that served golang.design: a
+// Source reads the store of the redir fork that served golang.design: a
 // SQLite file written by a version predating the host column, the visitor
 // cookie and the derived statistics columns.
 //
@@ -29,7 +36,7 @@ import (
 // store, so the column has no counterpart and is dropped. One link and 45
 // visits carry kind=1; they are migrated as ordinary rows rather than
 // discarded, since that is what they always were.
-type SQLite struct {
+type Source struct {
 	db *sql.DB
 	// since narrows the visits to those recorded after it, for the second
 	// pass that closes the window between an import and a route switch.
@@ -37,10 +44,10 @@ type SQLite struct {
 	since time.Time
 }
 
-// OpenSQLite opens path read-only. The file is the fallback if the
-// migration is wrong, so it must come out unchanged; the connection is
-// opened in a mode that cannot write to it.
-func OpenSQLite(path string, since time.Time) (*SQLite, error) {
+// Open opens path read-only. The file is the fallback if the migration is
+// wrong, so it must come out unchanged; the connection is opened in a
+// mode that cannot write to it.
+func Open(path string, since time.Time) (*Source, error) {
 	db, err := sql.Open("sqlite",
 		"file:"+path+"?mode=ro&_pragma=query_only(1)")
 	if err != nil {
@@ -50,12 +57,12 @@ func OpenSQLite(path string, since time.Time) (*SQLite, error) {
 		db.Close()
 		return nil, fmt.Errorf("cannot open %v: %w", path, err)
 	}
-	return &SQLite{db: db, since: since}, nil
+	return &Source{db: db, since: since}, nil
 }
 
-func (s *SQLite) Close() error { return s.db.Close() }
+func (s *Source) Close() error { return s.db.Close() }
 
-func (s *SQLite) Links(ctx context.Context) ([]Link, error) {
+func (s *Source) Links(ctx context.Context) ([]migrate.Link, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT alias, url, private, created_at, updated_at FROM collink`)
 	if err != nil {
@@ -63,10 +70,10 @@ func (s *SQLite) Links(ctx context.Context) ([]Link, error) {
 	}
 	defer rows.Close()
 
-	var links []Link
+	var links []migrate.Link
 	for rows.Next() {
 		var (
-			l                    Link
+			l                    migrate.Link
 			private              int
 			createdAt, updatedAt sql.NullTime
 		)
@@ -87,7 +94,7 @@ func (s *SQLite) Links(ctx context.Context) ([]Link, error) {
 	return links, rows.Err()
 }
 
-func (s *SQLite) Visits(ctx context.Context, fn func(Visit) error) error {
+func (s *Source) Visits(ctx context.Context, fn func(migrate.Visit) error) error {
 	// The filter is applied in Go, not in SQL.
 	//
 	// created_at is TEXT holding a Go timestamp such as
@@ -108,7 +115,7 @@ func (s *SQLite) Visits(ctx context.Context, fn func(Visit) error) error {
 
 	for rows.Next() {
 		var (
-			v               Visit
+			v               migrate.Visit
 			ip, ua, referer sql.NullString
 			createdAt       sql.NullTime
 		)
@@ -134,7 +141,7 @@ func (s *SQLite) Visits(ctx context.Context, fn func(Visit) error) error {
 	return rows.Err()
 }
 
-func (s *SQLite) Counts(ctx context.Context) (links, visits int64, err error) {
+func (s *Source) Counts(ctx context.Context) (links, visits int64, err error) {
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM collink`).Scan(&links); err != nil {
 		return 0, 0, fmt.Errorf("cannot count collink: %w", err)
@@ -170,8 +177,8 @@ func (s *SQLite) Counts(ctx context.Context) (links, visits int64, err error) {
 
 // after reports whether t is strictly later than the cutoff. An unset
 // cutoff takes everything.
-func (s *SQLite) after(t time.Time) bool {
+func (s *Source) after(t time.Time) bool {
 	return s.since.IsZero() || t.After(s.since)
 }
 
-var _ Source = (*SQLite)(nil)
+var _ migrate.Source = (*Source)(nil)

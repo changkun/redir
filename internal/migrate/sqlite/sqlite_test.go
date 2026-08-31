@@ -2,16 +2,20 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-package migrate_test
+package sqlite_test
 
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"changkun.de/x/redir/internal/db"
 	"changkun.de/x/redir/internal/migrate"
+	"changkun.de/x/redir/internal/migrate/sqlite"
+	"github.com/jackc/pgx/v5"
 	_ "modernc.org/sqlite"
 )
 
@@ -98,6 +102,37 @@ const (
 // The rows here are inserted as raw text in the fork's own format rather
 // than through the driver, because writing and reading with the same
 // driver is what hid the fault.
+// The end-to-end tests write into a real PostgreSQL, because the point of
+// the source is what arrives on the other side.
+
+func targetURI() string {
+	if uri := os.Getenv("REDIR_TEST_POSTGRES"); uri != "" {
+		return uri
+	}
+	return "postgres://redir:redir@127.0.0.1:5432/redir_test?sslmode=disable"
+}
+
+func connect(ctx context.Context, t *testing.T) *pgx.Conn {
+	t.Helper()
+	conn, err := pgx.Connect(ctx, targetURI())
+	if err != nil {
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(ctx) })
+	return conn
+}
+
+// schema applies redir's migrations, since a migration target needs the
+// tables to exist.
+func schema(ctx context.Context, t *testing.T) {
+	t.Helper()
+	s, err := db.NewStore(ctx, targetURI())
+	if err != nil {
+		t.Skipf("cannot open store: %v", err)
+	}
+	s.Close()
+}
+
 func TestSQLiteSinceExcludesTheBoundary(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "raw.db")
 	db, err := sql.Open("sqlite", path)
@@ -125,7 +160,7 @@ func TestSQLiteSinceExcludesTheBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	src, err := migrate.OpenSQLite(path, watermark)
+	src, err := sqlite.Open(path, watermark)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +189,7 @@ func TestSQLiteSinceExcludesTheBoundary(t *testing.T) {
 
 	// And with no watermark both rows come back, so the filter is not
 	// simply dropping everything.
-	all, err := migrate.OpenSQLite(path, time.Time{})
+	all, err := sqlite.Open(path, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +200,7 @@ func TestSQLiteSinceExcludesTheBoundary(t *testing.T) {
 }
 
 func TestSQLiteCounts(t *testing.T) {
-	src, err := migrate.OpenSQLite(forkDB(t), time.Time{})
+	src, err := sqlite.Open(forkDB(t), time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +223,7 @@ func TestSQLiteMigration(t *testing.T) {
 	schema(ctx, t)
 	conn := connect(ctx, t)
 
-	src, err := migrate.OpenSQLite(forkDB(t), time.Time{})
+	src, err := sqlite.Open(forkDB(t), time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +314,7 @@ func TestSQLiteSincePass(t *testing.T) {
 
 	// A first pass covering everything up to a cutoff.
 	cutoff := time.Date(2026, 1, 1, 20, 0, 0, 0, time.UTC)
-	first, err := migrate.OpenSQLite(path, time.Time{})
+	first, err := sqlite.Open(path, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,14 +322,14 @@ func TestSQLiteSincePass(t *testing.T) {
 
 	// Simulate the first pass having stopped at the cutoff by importing
 	// only what precedes it, then appending the rest.
-	early, err := migrate.OpenSQLite(path, time.Time{})
+	early, err := sqlite.Open(path, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer early.Close()
 	_ = early
 
-	late, err := migrate.OpenSQLite(path, cutoff)
+	late, err := sqlite.Open(path, cutoff)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +380,7 @@ func TestSQLiteSincePass(t *testing.T) {
 // the fallback if the migration is wrong.
 func TestSQLiteIsOpenedReadOnly(t *testing.T) {
 	path := forkDB(t)
-	src, err := migrate.OpenSQLite(path, time.Time{})
+	src, err := sqlite.Open(path, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
