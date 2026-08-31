@@ -414,3 +414,158 @@ func TestDryRunWritesNothing(t *testing.T) {
 		t.Fatalf("a dry run wrote %d links and %d visits", links, visits)
 	}
 }
+
+// TestRederiveUpdatesStaleRows covers the reason Rederive exists. The
+// derived columns cache a pure function of ua and referer, so improving
+// that function leaves stored rows classified by the old rule while new
+// rows use the new one, and a single chart then mixes the two.
+func TestRederiveUpdatesStaleRows(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Put the table into the state an older rule would have left: a
+	// crawler recorded as a person, with no browser facts at all.
+	if _, err := conn.Exec(ctx, `
+		UPDATE visits
+		SET is_bot = false, browser = '', os = '', device = '',
+		    referer_host = ''
+		WHERE host = $1`, testHost); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := migrate.Rederive(ctx, targetURI(), testHost); err != nil {
+		t.Fatalf("rederive failed: %v", err)
+	}
+
+	var bots int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1 AND is_bot`,
+		testHost).Scan(&bots); err != nil {
+		t.Fatal(err)
+	}
+	if bots != 1 {
+		t.Errorf("%d bot rows after re-deriving, want 1 (UptimeRobot)", bots)
+	}
+
+	var browser, refHost string
+	if err := conn.QueryRow(ctx, `
+		SELECT browser, referer_host FROM visits
+		WHERE host = $1 AND ip = '1.2.3.4'`, testHost,
+	).Scan(&browser, &refHost); err != nil {
+		t.Fatal(err)
+	}
+	if browser != "Chrome" {
+		t.Errorf("browser = %q after re-deriving, want Chrome", browser)
+	}
+	if refHost != "news.ycombinator.com" {
+		t.Errorf("referer_host = %q after re-deriving", refHost)
+	}
+}
+
+// TestRederiveIsIdempotent checks a second run writes nothing. It reads
+// live data, so re-running after any rule change must be safe.
+func TestRederiveIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Rederive(ctx, targetURI(), testHost); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshot(ctx, t, conn)
+	if err := migrate.Rederive(ctx, targetURI(), testHost); err != nil {
+		t.Fatal(err)
+	}
+	if after := snapshot(ctx, t, conn); after != before {
+		t.Fatalf("a second run changed the table:\n before %v\n after  %v",
+			before, after)
+	}
+}
+
+// TestRederiveLeavesSourceColumnsAlone checks it rewrites only what it
+// computes. ua and referer are the input; losing them would make the
+// derivation unrepeatable.
+func TestRederiveLeavesSourceColumnsAlone(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+	var beforeUA, beforeRef, beforeIP string
+	if err := conn.QueryRow(ctx, `
+		SELECT ua, referer, ip FROM visits WHERE host = $1 AND ip = '1.2.3.4'`,
+		testHost).Scan(&beforeUA, &beforeRef, &beforeIP); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := migrate.Rederive(ctx, targetURI(), testHost); err != nil {
+		t.Fatal(err)
+	}
+
+	var afterUA, afterRef, afterIP string
+	if err := conn.QueryRow(ctx, `
+		SELECT ua, referer, ip FROM visits WHERE host = $1 AND ip = '1.2.3.4'`,
+		testHost).Scan(&afterUA, &afterRef, &afterIP); err != nil {
+		t.Fatal(err)
+	}
+	if afterUA != beforeUA || afterRef != beforeRef || afterIP != beforeIP {
+		t.Fatal("re-deriving rewrote a source column")
+	}
+}
+
+// TestRederiveOtherHostUntouched checks it is scoped to one site.
+func TestRederiveOtherHostUntouched(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO visits (host, alias, ip, ua, time, is_bot)
+		VALUES ('other.example', 'a', '8.8.8.8', $1, NOW(), false)`,
+		"Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := migrate.Rederive(ctx, targetURI(), testHost); err != nil {
+		t.Fatal(err)
+	}
+
+	var isBot bool
+	if err := conn.QueryRow(ctx,
+		`SELECT is_bot FROM visits WHERE host = 'other.example' AND ip = '8.8.8.8'`,
+	).Scan(&isBot); err != nil {
+		t.Fatal(err)
+	}
+	if isBot {
+		t.Fatal("re-deriving one host changed another host's rows")
+	}
+}
+
+// snapshot returns a stable description of the derived columns.
+func snapshot(ctx context.Context, t *testing.T, conn *pgx.Conn) string {
+	t.Helper()
+	var s string
+	if err := conn.QueryRow(ctx, `
+		SELECT string_agg(
+		         id || ':' || browser || ':' || os || ':' || device ||
+		         ':' || is_bot || ':' || referer_host, '|' ORDER BY id)
+		FROM visits WHERE host = $1`, testHost).Scan(&s); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}

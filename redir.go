@@ -11,11 +11,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"time"
 
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
+	"changkun.de/x/redir/internal/migrate"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/version"
@@ -31,7 +33,28 @@ var (
 	private  = flag.Bool("p", false, "The link is private and will not be listed in the index page, avaliable for operator create/update")
 	trust    = flag.Bool("trust", false, "The link is either trusted to not show privacy warning page or untrusted to show privacy warning page for external redirects")
 	validt   = flag.String("vt", "", "the alias will start working from the specified time, format in RFC3339, e.g. 2006-01-02T15:04:05+07:00. Avaliable for operator create/update")
+	rederive = flag.Bool("rederive", false, "Recompute the browser, os, device, bot and referer host of stored visits, then exit")
 )
+
+// runRederive recomputes the columns derived from a visit's user agent
+// and referer.
+//
+// Those columns cache a pure function of ua and referer, so improving the
+// function leaves the stored values stale. Without this, visits recorded
+// before a rule changed are classified by the old rule and everything
+// since by the new one, and a single chart mixes the two.
+func runRederive() {
+	ctx, cancel := signal.NotifyContext(context.Background(),
+		os.Interrupt, os.Kill)
+	defer cancel()
+
+	host := config.Conf.Hostname()
+	log.Printf("re-deriving visits for %v in %v", host,
+		db.Redact(config.Conf.Store))
+	if err := migrate.Rederive(ctx, config.Conf.Store, host); err != nil {
+		log.Fatalf("cannot re-derive visits: %v", err)
+	}
+}
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `redir is a featured URL shortener. The redir server (run via '-s' option),
@@ -95,6 +118,10 @@ func main() {
 		return
 	}
 
+	if *rederive {
+		runRederive()
+		return
+	}
 	if *daemon {
 		runServer()
 		return
