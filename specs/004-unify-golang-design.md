@@ -1,6 +1,6 @@
 ---
 title: Unify the golang.design deployment
-status: planned
+status: complete
 depends_on:
   - 002-postgres-store
 affects:
@@ -212,6 +212,57 @@ pv_pg(alias)  ==  count(sqlite visit where alias = alias)
    process, and `golang.design/x/` still serves the `go-import` meta tag.
 5. The changkun.de service is untouched while the golang.design container
    is removed, confirmed by container id and uptime.
+
+## Outcome
+
+Completed 2026-08-31. `golang.design/s/` and `/x/` are served by
+`changkun/redir`, from the same process and store as `changkun.de`.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| Data imported | 63 links, 95,138 visits |
+| Per-alias parity | all 63 aliases identical to SQLite on PV and UV, rehearsed on a copy of the real file before touching production |
+| changkun.de | untouched: 184 links, 348,449 visits, serving throughout |
+| Per-host separation | 104 public links against 63; `email` exists on both hosts with entirely different statistics |
+| `/x/` | `go-import` names `golang-design/lockfree`, not `changkun/lockfree` |
+| Redirects | all 63 return 307 to their targets |
+| Visit total | 95,142 against SQLite's 95,139: consistent and larger, the difference being traffic recorded after the switch |
+
+### What went wrong
+
+**Every external link showed an interstitial.** The fork has no notion of
+a trusted link, so its 63 links imported as untrusted, and the current
+code shows a warning page before an untrusted external redirect. 62 of 63
+links stopped redirecting directly. Caught by checking the status codes
+after the cutover rather than only that the pages loaded: they returned
+200, not 307. The links were marked trusted, which is the behaviour they
+had.
+
+The lesson is the same as the timestamp fault in `002`: a column the
+source does not have is not a column whose default is safe. `trust`
+absent meant "no such concept", not "false".
+
+**The incremental pass would have duplicated a row.** `created_at` is
+TEXT holding a Go timestamp with nanoseconds, so `created_at > ?` compared
+the stored string against whatever layout the driver renders a `time.Time`
+in. Against the real file the row exactly at the watermark came back as
+later than itself. The unit tests missed it because they wrote and read
+through the same driver, the one arrangement where the formats agree.
+
+It turned out not to matter: the only row the window held was a request
+from `127.0.0.1`, made by this migration's own testing against the old
+container.
+
+**The import was more machinery than the job needed.** A `Source`
+interface, a SQLite package, a driver dependency and its tests, for one
+import that `sqlite3` dumping CSV and `psql` loading it would have done,
+with `-rederive` filling the derived columns. The driver also reached the
+server binary, which imports the migration package for `-rederive`, adding
+5.7 MB of database engine the server never opens. All of it is removed;
+`Rederive` moved to `internal/db`, which is the part with a continuing
+job.
 
 ## Rollback
 
