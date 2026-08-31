@@ -27,6 +27,12 @@ would have had two candidate causes and neither could be ruled out.
 | [004-unify-golang-design.md](004-unify-golang-design.md) | Complete | Fold the diverged golang.design/redir deployment into this codebase as a second host and retire its service |
 | [005-drop-mongodb.md](005-drop-mongodb.md) | Complete | Remove the MongoDB backend and stop the container, with v0.7.0 as the release to return to |
 
+## Dashboard
+
+| Spec | Status | Deliverable |
+| --- | --- | --- |
+| [006-operator-console.md](006-operator-console.md) | Complete | Rebuild the dashboard as a console: totals first, a dense listing second, one link's detail third |
+
 ## Status
 
 - ● Complete
@@ -40,6 +46,7 @@ would have had two candidate causes and neither could be ruled out.
 | 003-enriched-stats | ● |
 | 004-unify-golang-design | ● |
 | 005-drop-mongodb | ● |
+| 006-operator-console | ● |
 
 ## Dependencies
 

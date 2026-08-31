@@ -1,6 +1,6 @@
 ---
 title: Operator console
-status: planned
+status: complete
 depends_on:
   - 003-enriched-stats
   - 004-unify-golang-design
@@ -132,6 +132,58 @@ compact row rather than three stacked 300px blocks.
   fixture with known bot and non-bot rows, asserting bots are excluded.
 - A test that the public index response carries neither totals nor series.
 - Dashboard tests for the pure functions the charts read.
+
+## Outcome
+
+Completed 2026-09-01.
+
+| Check | Result |
+| --- | --- |
+| Bundle | 3,389 KB → **1,070 KB**, gzip 1,055 KB → 343 KB |
+| Dependencies | 7 → 4: antd, dayjs, react, react-dom |
+| Overview totals | match independently written SQL; people + bots equals visits on both sites |
+| Requests per page | 2, not 21: one overview, one listing carrying every row's series |
+| Both sites | render their own name, links and totals |
+| Public listing | no totals, no series, no target URL |
+| Tests | 25, including render tests for the admin view, the public view and the legal links |
+
+### What the removals were for
+
+Neither dependency went for tidiness. `pro-components` **was** the look:
+`EditableProTable` decided the layout, the density and the type, and
+pulled `pro-layout`, `pro-list`, `pro-form` and `pro-utils` behind it.
+`@ant-design/charts` was most of a megabyte to draw two polylines over a
+few dozen points, in its own visual language rather than this one.
+
+### Decisions worth keeping
+
+**Editing left the row.** A row is for reading, and eleven inline inputs
+is what made the old table unreadable. A form also has room to say what a
+field means, so `Trustable: Trusted/Untrusted` became "External
+redirects: redirect directly, or warn first" — the setting that silently
+put an interstitial in front of 62 golang.design links during `004`, and
+which the old label did nothing to explain.
+
+**The sparkline's scale is per row.** It answers whether a link is busy
+lately and when, not whether it is busier than the row above; the PV
+column answers that. A shared scale would flatten every quiet row into a
+straight line.
+
+**The site is shown, not chosen.** One process serves both hosts, but
+which one is administered is decided by the address the request arrived
+on. A switcher would imply otherwise.
+
+**The suite renders the console.** A rewrite replacing every component at
+once fails by blanking the page, and neither the build nor a unit test on
+a helper notices. That needed a DOM environment, which the project did not
+have.
+
+### Not verified
+
+Creating, editing and deleting a link were exercised by the render tests
+and by their handlers' own tests, but not end to end against production,
+which needs a signed-in session. The paths are unchanged from the code
+they replaced; the forms around them are new.
 
 ## Out of Scope
 
