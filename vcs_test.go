@@ -162,3 +162,61 @@ func indexOf(h, n string) int {
 	}
 	return -1
 }
+
+// TestLegalPagesBelongToTheirSite is the reason the legal pages do not
+// follow a process onto another domain.
+//
+// An impressum is a statement of who operates a site, and a privacy
+// policy names the party responsible for the data. Serving changkun.de's
+// under golang.design published one operator's name and postal address on
+// another's domain. Suppressing the links was not enough: the routes
+// themselves answered.
+func TestLegalPagesBelongToTheirSite(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+
+	config.Conf.Host = "https://changkun.de"
+	config.Conf.GDPR.Impressum.Enable = true
+	config.Conf.GDPR.Impressum.Content = "<p>Operator, Some Street</p>"
+	config.Conf.GDPR.Privacy.Enable = true
+	config.Conf.GDPR.Privacy.Content = "<p>Privacy</p>"
+	config.Conf.GDPR.Contact.Enable = true
+	config.Conf.GDPR.Contact.Email = "hi@example.test"
+	config.Conf.Hosts = map[string]config.SiteOverride{
+		"golang.design": {Legal: false},
+		"changkun.us":   {Legal: true},
+	}
+
+	s := &server{}
+	for _, page := range []string{".impressum", ".privacy", ".contact"} {
+		for _, tt := range []struct {
+			host  string
+			serve bool
+		}{
+			{"changkun.de", true},
+			{"changkun.us", true},    // same operator, opted in
+			{"golang.design", false}, // different site
+		} {
+			t.Run(tt.host+page, func(t *testing.T) {
+				w := httptest.NewRecorder()
+				r := httptest.NewRequest(http.MethodGet, "/s/"+page, nil)
+				r.Host = tt.host
+				if err := s.serveStatic(context.Background(), w, r, "/s/"); err != nil {
+					t.Fatal(err)
+				}
+
+				body := w.Body.String()
+				switch {
+				case tt.serve && w.Code != http.StatusOK:
+					t.Fatalf("status %d, want the page to be served", w.Code)
+				case !tt.serve && w.Code != http.StatusNotFound:
+					t.Fatalf("status %d, want 404: this site does not carry %v",
+						w.Code, page)
+				}
+				if !tt.serve && contains(body, "Some Street") {
+					t.Fatal("another site's operator address was published here")
+				}
+			})
+		}
+	}
+}

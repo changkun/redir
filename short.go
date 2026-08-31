@@ -260,6 +260,11 @@ func (s *server) serveStatic(
 	r *http.Request,
 	prefix string,
 ) error {
+	// The legal pages state who operates a site, so they follow the site
+	// the request arrived on rather than the process. A second site does
+	// not inherit them; see specs/004-unify-golang-design.md.
+	site := config.Conf.SiteFor(r.Host)
+
 	var (
 		t *template.Template
 		d *pageInfo
@@ -297,39 +302,43 @@ func (s *server) serveStatic(
 		_, err = w.Write(b)
 		return err
 	case strings.HasPrefix(r.URL.Path, prefix+".impressum"):
-		if config.Conf.GDPR.Impressum.Enable {
+		if site.ShowImpressum {
 			t = impressumTmpl
 		}
 		d = &pageInfo{
 			Body:          template.HTML(config.Conf.GDPR.Impressum.Content),
-			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-			ShowContact:   config.Conf.GDPR.Contact.Enable,
+			ShowImpressum: site.ShowImpressum,
+			ShowPrivacy:   site.ShowPrivacy,
+			ShowContact:   site.ShowContact,
 		}
 	case strings.HasPrefix(r.URL.Path, prefix+".privacy"):
-		if config.Conf.GDPR.Privacy.Enable {
+		if site.ShowPrivacy {
 			t = privacyTmpl
 		}
 		d = &pageInfo{
 			Body:          template.HTML(config.Conf.GDPR.Privacy.Content),
-			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-			ShowContact:   config.Conf.GDPR.Contact.Enable,
+			ShowImpressum: site.ShowImpressum,
+			ShowPrivacy:   site.ShowPrivacy,
+			ShowContact:   site.ShowContact,
 		}
 	case strings.HasPrefix(r.URL.Path, prefix+".contact"):
-		if config.Conf.GDPR.Contact.Enable {
+		if site.ShowContact {
 			t = contactTmpl
 		}
 		d = &pageInfo{
 			Email:         config.Conf.GDPR.Contact.Email,
-			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-			ShowContact:   config.Conf.GDPR.Contact.Enable,
+			ShowImpressum: site.ShowImpressum,
+			ShowPrivacy:   site.ShowPrivacy,
+			ShowContact:   site.ShowContact,
 		}
 	}
 	if t != nil {
 		return t.Execute(w, d)
 	}
+	// A site that does not carry these pages has no such route. Saying so
+	// is better than an empty 200, which reads as a page that is merely
+	// blank.
+	http.NotFound(w, r)
 	return nil
 }
 
