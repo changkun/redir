@@ -19,7 +19,7 @@ two candidate causes and neither could be ruled out.
 | Spec | Status | Deliverable |
 | --- | --- | --- |
 | [001-shared-postgres.md](001-shared-postgres.md) | Complete | Extract the PostgreSQL instance out of the urlstat compose project into shared infrastructure both services use as equal clients |
-| [002-postgres-store.md](002-postgres-store.md) | In progress | Replace the MongoDB store with PostgreSQL and copy the data across, with every stat unchanged and MongoDB untouched |
+| [002-postgres-store.md](002-postgres-store.md) | Complete | Replace the MongoDB store with PostgreSQL and copy the data across, with every stat unchanged and MongoDB untouched |
 | [003-enriched-stats.md](003-enriched-stats.md) | Planned | Spend the enriched columns: group user agents and referrers in SQL, exclude bots consistently, drop the client-side parser |
 | [004-unify-golang-design.md](004-unify-golang-design.md) | Planned | Fold the diverged golang.design/redir deployment into this codebase as a second host and retire its service |
 
@@ -32,7 +32,7 @@ two candidate causes and neither could be ruled out.
 | Spec | State |
 | --- | --- |
 | 001-shared-postgres | ● |
-| 002-postgres-store | ◐ |
+| 002-postgres-store | ● |
 | 003-enriched-stats | ○ |
 | 004-unify-golang-design | ○ |
 

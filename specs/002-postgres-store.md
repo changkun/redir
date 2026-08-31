@@ -1,6 +1,6 @@
 ---
 title: PostgreSQL store
-status: in progress
+status: complete
 depends_on:
   - 001-shared-postgres
 affects:
@@ -385,6 +385,11 @@ changing one line of configuration.
 | Endpoints | `/s/`, `/s/<alias>` (307), `/s/?mode=index`, `/x/` all serving |
 | MongoDB | 348,367 documents, unchanged, no writes after the copy |
 | Neighbours | urlstat and golang.design unaffected |
+| Timestamp repair | 124 zero `valid_from`, 131 `created_at`, 106 `updated_at` restored; all 348,371 visits kept |
+
+A parity re-check after the repair differed on two aliases only, `blog`
+and `resume`, by exactly the requests made while verifying. The other 182
+were identical.
 
 ### What went wrong
 
