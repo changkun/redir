@@ -101,6 +101,27 @@ type UAStat struct {
 	Count int64  `json:"count"`
 }
 
+// Overview is what a site amounts to: how many links it has, how much
+// traffic they drew, and how much of that was a person.
+//
+// It exists because the console's first question is whether anything is
+// happening, and answering it from the link listing would mean paging
+// through every link to add up columns.
+type Overview struct {
+	Links  int64      `json:"links"`
+	Visits int64      `json:"visits"`
+	People int64      `json:"people"`
+	Bots   int64      `json:"bots"`
+	Series []DayCount `json:"series"`
+}
+
+// DayCount is one day of a series.
+type DayCount struct {
+	Day string `json:"day"`
+	PV  int64  `json:"pv"`
+	UV  int64  `json:"uv"`
+}
+
 // TimeHist statistics
 type TimeHist struct {
 	Time time.Time `json:"time"`

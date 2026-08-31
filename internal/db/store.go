@@ -57,6 +57,12 @@ type Store interface {
 	StatUA(ctx context.Context, host, alias string, start, end time.Time) ([]models.UAStat, error)
 	// StatVisitHist counts non-bot PV and UV per hour within [start, end).
 	StatVisitHist(ctx context.Context, host, alias string, start, end time.Time) ([]models.TimeHist, error)
+	// StatOverview totals one site: its links, its traffic, and how much
+	// of that traffic was a person.
+	StatOverview(ctx context.Context, host string, start, end time.Time) (models.Overview, error)
+	// StatDaily returns a daily non-bot count per alias, in one query, so
+	// a page of rows costs one round trip rather than one each.
+	StatDaily(ctx context.Context, host string, aliases []string, start, end time.Time) (map[string][]models.DayCount, error)
 	// StatVisit counts PV and UV for the given aliases.
 	StatVisit(ctx context.Context, host string, aliases []string) ([]models.VisitRecord, error)
 }

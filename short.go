@@ -520,6 +520,8 @@ func (s *server) sIndex(
 		return s.indexData(ctx, w, r, true)
 	case "index-pro": // data with statistics
 		return s.indexData(ctx, w, r, false)
+	case "overview": // totals for the console's header
+		return s.overviewData(ctx, w, r)
 	case "admin":
 		_, err := s.handleAuth(w, r)
 		if err != nil {
@@ -538,10 +540,15 @@ func (s *server) sIndex(
 	return dTmpl.Execute(w, e)
 }
 
+// indexOutput is the link listing. Series carries one entry per alias on
+// the page, and is absent from the public listing, which draws none.
+// indexOutput is the link listing. Series carries one entry per alias on
+// the page, and is absent from the public listing, which draws none.
 type indexOutput struct {
-	Data  []models.RedirIndex `json:"data"`
-	Page  int64               `json:"page"`
-	Total int64               `json:"total"`
+	Data   []models.RedirIndex `json:"data"`
+	Page   int64               `json:"page"`
+	Total  int64               `json:"total"`
+	Series map[string][]int64  `json:"series,omitempty"`
 }
 
 // index on all aliases, require admin access.
@@ -571,21 +578,107 @@ func (s *server) indexData(
 		pageNum = 1
 	}
 
-	rs, total, err := s.db.FetchAliasAll(ctx, config.Conf.ResolveHost(r.Host),
+	host := config.Conf.ResolveHost(r.Host)
+	rs, total, err := s.db.FetchAliasAll(ctx, host,
 		public, int64(pageSize), int64(pageNum))
 	if err != nil {
 		return err
 	}
 
-	b, err := json.Marshal(indexOutput{
+	out := indexOutput{
 		Data:  rs,
 		Page:  int64(pageNum),
 		Total: total,
-	})
+	}
+
+	// The console draws a sparkline on every row. Fetching one per row
+	// would make a page of twenty links twenty round trips for a handful
+	// of numbers each, so the series for the whole page comes back with
+	// it. The public index draws no sparkline and is not charged for one.
+	if !public && len(rs) > 0 {
+		aliases := make([]string, 0, len(rs))
+		for _, r := range rs {
+			aliases = append(aliases, r.Alias)
+		}
+		start, end := sparkRange()
+		series, err := s.db.StatDaily(ctx, host, aliases, start, end)
+		if err != nil {
+			return err
+		}
+		out.Series = fillSeries(series, start, end)
+	}
+
+	b, err := json.Marshal(out)
 	if err != nil {
 		return err
 	}
 
+	_, _ = w.Write(b)
+	return nil
+}
+
+// sparkDays is how far back a row's sparkline reaches. Two weeks is
+// enough to show a shape without making the bars unreadably thin.
+const sparkDays = 14
+
+func sparkRange() (start, end time.Time) {
+	end = time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+	return end.AddDate(0, 0, -sparkDays), end
+}
+
+// fillSeries turns the store's sparse days into one value per day, so the
+// dashboard draws a fixed number of bars and a quiet day is a gap in the
+// shape rather than a missing bar that shifts everything after it.
+func fillSeries(
+	series map[string][]models.DayCount,
+	start, end time.Time,
+) map[string][]int64 {
+	days := make([]string, 0, sparkDays)
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		days = append(days, d.Format(time.DateOnly))
+	}
+
+	out := make(map[string][]int64, len(series))
+	for alias, counts := range series {
+		byDay := make(map[string]int64, len(counts))
+		for _, c := range counts {
+			byDay[c.Day] = c.PV
+		}
+		row := make([]int64, len(days))
+		for i, d := range days {
+			row[i] = byDay[d]
+		}
+		out[alias] = row
+	}
+	return out
+}
+
+// overviewData answers the console's first question, whether anything is
+// happening, in one request. Adding these up from the link listing would
+// mean paging through every link.
+func (s *server) overviewData(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
+	if _, err := s.handleAuth(w, r); err != nil {
+		return err
+	}
+	w.Header().Add("Content-Type", "application/json")
+
+	start, end, err := parseDuration(r.URL.Query())
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidStatParam, err)
+	}
+
+	o, err := s.db.StatOverview(ctx, config.Conf.ResolveHost(r.Host), start, end)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(o)
+	if err != nil {
+		return err
+	}
 	_, _ = w.Write(b)
 	return nil
 }
