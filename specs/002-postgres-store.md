@@ -293,9 +293,22 @@ written by the server are identical.
 
 Run against production data, both stores live, before cutover.
 
+### What must match, and what must not
+
+Three differences are expected and are not data loss. Comparing the wrong
+keys turns each of them into a false alarm.
+
+| Query | Compare | Not |
+| --- | --- | --- |
+| `StatVisitHist` | `(truncated hour, pv, uv)` | `TimeHist.Time`. MongoDB returns `{$first: '$time'}`, an actual visit timestamp inside the hour; PostgreSQL returns the start of the bucket. |
+| `StatVisit` | rows sorted by alias | the returned order. Both sort by `pv DESC, uv DESC`, so aliases with equal counts come back in an arbitrary order. |
+| `FetchAliasAll`, non-public | the union of all pages | page by page. MongoDB skips and limits *before* its lookup and sorts within the page; PostgreSQL sorts across the whole set and then pages. The totals agree, the page boundaries do not. |
+
+### Steps
+
 1. **Row counts.** `links` 184, `visits` 348,356.
 2. **Per-alias PV/UV.** Dump `StatVisit` from both stores for all 184
-   aliases and diff. Expected: byte-identical.
+   aliases, sort by alias, and diff. Expected: identical.
    ```
    pv_pg(alias) == pv_mongo(alias)   for every alias
    uv_pg(alias) == uv_mongo(alias)   for every alias
@@ -304,7 +317,8 @@ Run against production data, both stores live, before cutover.
    including the 72,118 orphans, which no stat query returns but the
    migration must still carry.
 4. **Per-alias stats.** For the ten highest-PV aliases, diff `referer`,
-   `ua` and hourly `time` output between stores over the default range.
+   `ua` and hourly `time` output between stores over the default range,
+   using the comparison keys above.
 5. **Derived columns.** No enriched column is `NULL`; `is_bot` is true for
    a hand-checked sample of known crawler UA strings.
 6. **Migrations.** A second startup against a migrated database applies
@@ -332,6 +346,20 @@ skip-on-no-connection guard.
   both stores.
 
 Coverage target for `internal/db` is 90%.
+
+## Deployment
+
+The scheme in the store URI chooses the backend, so the code and the
+cutover are two separate deployments:
+
+1. Deploy the binary with the configuration still naming `mongodb://`.
+   Everything keeps running on MongoDB, and the new code is proven to
+   serve traffic on its own. A fault here is the binary.
+2. Run the migration, verify, then change the URI to `postgres://` and
+   restart. A fault here is the store.
+
+Fused, an outage would have two candidate causes. This is the same reason
+002 and 003 are separate specs.
 
 ## Rollback
 
