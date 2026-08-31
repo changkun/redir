@@ -18,29 +18,19 @@ services:
     env_file:
       - path: ../.env
         required: false
-    depends_on:
-      - mongo
     deploy:
       replicas: 1
     networks:
       - traefik_proxy
       - postgres_internal
-  mongo:
-    restart: always
-    container_name: redirdb
-    image: mongo:4.4
-    mem_limit: 512m
-    memswap_limit: 1g
-    ports:
-      - "27018:27017"
-    volumes:
-      - ../data/mongo:/data/db
-    networks:
-      - traefik_proxy
+# The mongo service is gone: the store is PostgreSQL, on the shared
+# instance declared below. The container and its data directory are left
+# on the host, stopped, so that the rollback described in
+# specs/005-drop-mongodb.md needs only `docker start redirdb`.
 networks:
   traefik_proxy:
     external: true
   # Owned by changkun/proxy, which runs the shared database instance the
-  # store is migrating onto. See specs/001-shared-postgres.md.
+  # store lives on. See specs/001-shared-postgres.md.
   postgres_internal:
     external: true
