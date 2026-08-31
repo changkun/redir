@@ -11,6 +11,13 @@ import react from '@vitejs/plugin-react'
 // assetsDir in step with those paths.
 export default defineConfig({
   plugins: [react()],
+  test: {
+    // The console is a rewrite of every component, so the suite renders
+    // it. A missing import or a crash on first paint blanks the page,
+    // and nothing else in the build catches that.
+    environment: 'jsdom',
+    setupFiles: ['./src/test-setup.js'],
+  },
   build: {
     outDir: 'build',
     assetsDir: 'static',

@@ -67,10 +67,9 @@ describe('the client no longer parses user agents', () => {
 
   it('is not imported by the stats component', async () => {
     const fs = await import('node:fs/promises')
-    const src = await fs.readFile(
-      new URL('../components/Stats.jsx', import.meta.url),
-      'utf8',
-    )
+    // A path from the project root, not import.meta.url: under the jsdom
+    // environment that is an http URL and readFile refuses it.
+    const src = await fs.readFile('src/components/Stats.jsx', 'utf8')
     expect(src).not.toMatch(/ua-parser|UAParser/)
     // The synthetic string the old queries invented is gone from both
     // sides in the same change.

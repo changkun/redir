@@ -2,16 +2,62 @@
 Use of this source code is governed by a MIT
 license that can be found in the LICENSE file. */
 
+:root {
+  --bg: #0b0c0e;
+  --surface: #121316;
+  --surface-hover: #17181c;
+  --line: #232529;
+  --line-strong: #2e3137;
+  --text: #e6e7e9;
+  --text-dim: #9aa0a6;
+  --text-faint: #6b7176;
+  --accent: #4c8dff;
+  --good: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+html,
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Figures are read down a column, so their digits have to line up. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: var(--mono);
+}
+
+/* One focus treatment everywhere, visible against the dark ground. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+a {
+  color: var(--text);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent);
 }
