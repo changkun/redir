@@ -115,13 +115,33 @@ long enough to be worth reading.
 1. Bot share is quantified per alias before and after:
    `pv_after == pv_before - bot_rows(alias)`, checked for the ten
    highest-PV aliases.
-2. `browser` and `os` totals equal what the current client-side parser
-   produces for the same range, within the difference explained by bot
-   exclusion.
+2. `browser` and `os` totals equal what the client-side parser produces
+   for the same range, within the difference explained by bot exclusion.
+   This has to be run **before** `ua-parser-js` is removed, since
+   afterwards there is nothing to compare against.
 3. Referrer rows collapse: the row count for `referer_host` is lower than
    for `referer`, and their count sums are equal.
 4. The stats response for a busy alias is smaller than before, measured in
    bytes.
+5. The stored derivations are recomputed, since the bot rule changes in
+   this spec and the columns cache it. Without that, migrated rows are
+   classified by the old rule and new rows by the new one.
+
+### Measured bot share
+
+The share differs by an order of magnitude depending on what is counted,
+so the figure has to be qualified every time it is used.
+
+| Traffic | Visits | Bots |
+| --- | --- | --- |
+| Real aliases | 276,305 | 45.0% |
+| Index page | 68,975 | 97.6% |
+| Unresolved aliases | 3,155 | 48.2% |
+
+The 73% figure that appears in the `internal/models` golden test is the
+share of the **120 most frequent user agent strings**, which over-weights
+the uptime monitor hitting `/s/` every thirty seconds. The stats page
+shows one alias at a time, so what a reader sees drop is the 45%.
 
 ## Testing
 

@@ -63,9 +63,12 @@ func TestClassifyGolden(t *testing.T) {
 }
 
 // TestClassifyGoldenBotShare guards the number the golden file exists to
-// protect: how much of the recorded traffic is automated. UptimeRobot
-// alone is 66,358 of 348,356 production visits, all of which the dashboard
-// counts as a person today.
+// protect: how much of the sampled traffic is automated.
+//
+// This is the share of the 120 most frequent user agent strings, not of
+// all traffic. It over-weights the uptime monitor, which hits the index
+// every thirty seconds: on production the index page is 97.6% automated
+// and real alias traffic is 45.0%.
 func TestClassifyGoldenBotShare(t *testing.T) {
 	var bots, total int
 	for _, line := range readLines(t, "testdata/ua_sample.tsv") {
@@ -83,9 +86,9 @@ func TestClassifyGoldenBotShare(t *testing.T) {
 	}
 	share := float64(bots) / float64(total)
 	t.Logf("bot share of sampled visits: %.1f%% (%d/%d)", share*100, bots, total)
-	// The measured share is 72.6%: most of what redir records is not a
-	// person. A large move in either direction means the classifier
-	// changed its mind about common traffic, which is worth reviewing.
+	// The measured share of this sample is 73.2%. A large move in either
+	// direction means the classifier changed its mind about common
+	// traffic, which is worth reviewing.
 	if share < 0.6 || share > 0.85 {
 		t.Fatalf("bot share %.1f%% is outside the expected range", share*100)
 	}
