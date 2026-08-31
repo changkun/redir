@@ -369,3 +369,26 @@ func TestRedactInvalid(t *testing.T) {
 		t.Fatalf("Redact(%q) = %q, still contains the password", bad, got)
 	}
 }
+
+// TestZeroValidFromIsPreserved checks that a link with no valid_from
+// stays "valid since always" rather than becoming valid from the moment
+// it was stored. short.go refuses to redirect a link whose valid_from is
+// in the future, and 124 production links carry the zero value.
+func TestZeroValidFromIsPreserved(t *testing.T) {
+	run(t, func(t *testing.T, b backend, s db.Store) {
+		ctx := context.Background()
+
+		if err := s.StoreAlias(ctx, &models.Redir{
+			Host: khost, Alias: "no-valid-from", URL: "https://example.com",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		r, err := s.FetchAlias(ctx, khost, "no-valid-from")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !r.ValidFrom.IsZero() {
+			t.Fatalf("ValidFrom = %v, want the zero time", r.ValidFrom)
+		}
+	})
+}

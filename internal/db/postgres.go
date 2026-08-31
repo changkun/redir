@@ -77,11 +77,11 @@ func (db *pgStore) Close() error {
 }
 
 func (db *pgStore) StoreAlias(ctx context.Context, r *models.Redir) error {
+	// valid_from is stored as given, including the zero value. The
+	// MongoDB backend does the same, and short.go treats a zero time as
+	// "valid since always"; substituting the current time here would
+	// make it "valid from now", which is a different link.
 	now := time.Now().UTC()
-	validFrom := r.ValidFrom
-	if validFrom.IsZero() {
-		validFrom = now
-	}
 
 	var id int64
 	err := db.pool.QueryRow(ctx, `
@@ -90,7 +90,7 @@ func (db *pgStore) StoreAlias(ctx context.Context, r *models.Redir) error {
 			 created_by, updated_by, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 		RETURNING id`,
-		r.Host, r.Alias, r.URL, r.Private, r.Trust, validFrom,
+		r.Host, r.Alias, r.URL, r.Private, r.Trust, r.ValidFrom,
 		r.CreatedBy, r.UpdatedBy, now,
 	).Scan(&id)
 	if err != nil {

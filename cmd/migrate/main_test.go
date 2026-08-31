@@ -108,7 +108,7 @@ func TestMigrate(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	if err := run(ctx, mongoURI, pgURI, testHost, true, false); err != nil {
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "all"); err != nil {
 		t.Fatalf("migrate failed: %v", err)
 	}
 
@@ -202,10 +202,10 @@ func TestMigrateRefusesNonEmptyTarget(t *testing.T) {
 	mongoURI, pgURI := uris()
 	seed(ctx, t, mongoURI)
 
-	if err := run(ctx, mongoURI, pgURI, testHost, true, false); err != nil {
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "all"); err != nil {
 		t.Fatalf("first migrate failed: %v", err)
 	}
-	err := run(ctx, mongoURI, pgURI, testHost, false, false)
+	err := run(ctx, mongoURI, pgURI, testHost, false, false, "all")
 	if err == nil {
 		t.Fatal("migrate ran against a non-empty target, want a refusal")
 	}
@@ -218,7 +218,7 @@ func TestMigrateParity(t *testing.T) {
 	mongoURI, pgURI := uris()
 	seed(ctx, t, mongoURI)
 
-	if err := run(ctx, mongoURI, pgURI, testHost, true, false); err != nil {
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "all"); err != nil {
 		t.Fatalf("migrate failed: %v", err)
 	}
 
@@ -287,4 +287,105 @@ func sameRefs(a, b []models.RefStat) bool {
 		}
 	}
 	return true
+}
+
+// TestMigrateZeroTimestampsPreserved checks that a link with no
+// timestamps keeps them. valid_from gates the redirect and updated_at
+// orders the admin index, so stamping every undated link with the moment
+// of the migration changes both.
+func TestMigrateZeroTimestampsPreserved(t *testing.T) {
+	ctx := context.Background()
+	mongoURI, pgURI := uris()
+	seed(ctx, t, mongoURI)
+
+	// A link as 124 production rows look: no valid_from, no created_at,
+	// no updated_at.
+	cli, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI).
+		SetServerSelectionTimeout(5*time.Second))
+	if err != nil {
+		t.Skipf("cannot connect to mongo: %v", err)
+	}
+	defer cli.Disconnect(ctx)
+	if _, err := cli.Database("redir").Collection("links").InsertOne(ctx,
+		bson.M{"alias": "undated", "url": "https://example.com/undated",
+			"private": false}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "all"); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := pgx.Connect(ctx, pgURI)
+	if err != nil {
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	var validFrom, createdAt, updatedAt time.Time
+	if err := conn.QueryRow(ctx, `
+		SELECT valid_from, created_at, updated_at
+		FROM links WHERE host = $1 AND alias = 'undated'`, testHost,
+	).Scan(&validFrom, &createdAt, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	for name, got := range map[string]time.Time{
+		"valid_from": validFrom, "created_at": createdAt, "updated_at": updatedAt,
+	} {
+		if !got.IsZero() {
+			t.Errorf("%v = %v, want the zero time: the source had none",
+				name, got)
+		}
+	}
+}
+
+// TestMigrateLinksOnly checks the repair path. Visits carry no foreign
+// key into links, so the link rows can be replaced without touching the
+// visit history, which is what makes a fix possible after a cutover.
+func TestMigrateLinksOnly(t *testing.T) {
+	ctx := context.Background()
+	mongoURI, pgURI := uris()
+	seed(ctx, t, mongoURI)
+
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "all"); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := pgx.Connect(ctx, pgURI)
+	if err != nil {
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	// A visit recorded after the cutover, which the repair must keep.
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO visits (host, alias, ip, time)
+		VALUES ($1, 'visited', '9.9.9.9', NOW())`, testHost); err != nil {
+		t.Fatal(err)
+	}
+	var before int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1`, testHost,
+	).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(ctx, mongoURI, pgURI, testHost, true, false, "links"); err != nil {
+		t.Fatalf("links-only repair failed: %v", err)
+	}
+
+	var after, links int64
+	if err := conn.QueryRow(ctx, `
+		SELECT (SELECT COUNT(*) FROM visits WHERE host = $1),
+		       (SELECT COUNT(*) FROM links  WHERE host = $1)`, testHost,
+	).Scan(&after, &links); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatalf("visits went from %d to %d during a links-only run",
+			before, after)
+	}
+	if links != 2 {
+		t.Fatalf("%d links after the repair, want 2", links)
+	}
 }

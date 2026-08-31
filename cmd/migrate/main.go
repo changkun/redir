@@ -51,6 +51,10 @@ func main() {
 		host     = flag.String("host", "", "hostname to record for every migrated row")
 		truncate = flag.Bool("truncate", false, "empty the target tables first")
 		dryRun   = flag.Bool("dry-run", false, "read and count, write nothing")
+		// Visits carry no foreign key into links, so either table can be
+		// replaced without disturbing the other. That is what makes a
+		// repair of the link rows possible after the cutover.
+		only = flag.String("only", "all", "which tables to copy: all, links or visits")
 	)
 	flag.Parse()
 
@@ -65,12 +69,18 @@ func main() {
 		os.Interrupt, os.Kill)
 	defer stop()
 
-	if err := run(ctx, *from, *to, *host, *truncate, *dryRun); err != nil {
+	switch *only {
+	case "all", "links", "visits":
+	default:
+		log.Fatalf("-only %q: want all, links or visits", *only)
+	}
+
+	if err := run(ctx, *from, *to, *host, *truncate, *dryRun, *only); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(ctx context.Context, from, to, host string, truncate, dryRun bool) error {
+func run(ctx context.Context, from, to, host string, truncate, dryRun bool, only string) error {
 	src, err := openMongo(ctx, from)
 	if err != nil {
 		return err
@@ -91,21 +101,24 @@ func run(ctx context.Context, from, to, host string, truncate, dryRun bool) erro
 	}
 	defer pool.Close()
 
-	if err := prepareTarget(ctx, pool, truncate, dryRun); err != nil {
+	if err := prepareTarget(ctx, pool, truncate, dryRun, only); err != nil {
 		return err
 	}
 
-	links, err := copyLinks(ctx, src, pool, host, dryRun)
-	if err != nil {
-		return err
+	var links, visits int64
+	if only == "all" || only == "links" {
+		if links, err = copyLinks(ctx, src, pool, host, dryRun); err != nil {
+			return err
+		}
 	}
-	visits, err := copyVisits(ctx, src, pool, host, dryRun)
-	if err != nil {
-		return err
+	if only == "all" || only == "visits" {
+		if visits, err = copyVisits(ctx, src, pool, host, dryRun); err != nil {
+			return err
+		}
 	}
 
 	log.Printf("copied %d links and %d visits for host %v", links, visits, host)
-	return verify(ctx, src, pool, host, links, visits, dryRun)
+	return verify(ctx, src, pool, host, links, visits, dryRun, only)
 }
 
 func openMongo(ctx context.Context, uri string) (*mongo.Client, error) {
@@ -127,30 +140,51 @@ func openMongo(ctx context.Context, uri string) (*mongo.Client, error) {
 // prepareTarget refuses to add to a table that already holds rows.
 // Running the copy twice would double every visit count, and a doubled
 // count looks plausible enough to go unnoticed.
-func prepareTarget(ctx context.Context, pool *pgxpool.Pool, truncate, dryRun bool) error {
+func prepareTarget(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	truncate, dryRun bool,
+	only string,
+) error {
 	var links, visits int64
 	if err := pool.QueryRow(ctx,
 		`SELECT (SELECT COUNT(*) FROM links), (SELECT COUNT(*) FROM visits)`,
 	).Scan(&links, &visits); err != nil {
 		return fmt.Errorf("cannot inspect target: %w", err)
 	}
-	if links == 0 && visits == 0 {
+
+	// Only the tables about to be written matter. A links-only repair
+	// must not be blocked by, or destroy, the visit rows.
+	inWay := map[string]int64{}
+	if (only == "all" || only == "links") && links > 0 {
+		inWay["links"] = links
+	}
+	if (only == "all" || only == "visits") && visits > 0 {
+		inWay["visits"] = visits
+	}
+	if len(inWay) == 0 {
 		return nil
 	}
 	if !truncate {
 		return fmt.Errorf(
-			"target already holds %d links and %d visits; "+
-				"re-run with -truncate to replace them", links, visits)
+			"target already holds %v; re-run with -truncate to replace them",
+			inWay)
 	}
 	if dryRun {
-		log.Printf("dry run: would truncate %d links and %d visits", links, visits)
+		log.Printf("dry run: would truncate %v", inWay)
 		return nil
 	}
-	if _, err := pool.Exec(ctx,
-		`TRUNCATE links, visits RESTART IDENTITY`); err != nil {
-		return fmt.Errorf("cannot truncate target: %w", err)
+
+	// Truncated separately rather than in one statement, so that a
+	// links-only run leaves the visits alone. There is no foreign key
+	// between them, by design.
+	for t := range inWay {
+		if _, err := pool.Exec(ctx,
+			"TRUNCATE "+t+" RESTART IDENTITY"); err != nil {
+			return fmt.Errorf("cannot truncate %v: %w", t, err)
+		}
 	}
-	log.Printf("truncated %d links and %d visits", links, visits)
+	log.Printf("truncated %v", inWay)
 	return nil
 }
 
@@ -190,8 +224,8 @@ func copyLinks(
 		}
 		rows = append(rows, []any{
 			host, sanitize(l.Alias), sanitize(l.URL), l.Private, l.Trust,
-			orNow(l.ValidFrom), sanitize(l.CreatedBy), sanitize(l.UpdatedBy),
-			orNow(l.CreatedAt), orNow(l.UpdatedAt),
+			keep(l.ValidFrom), sanitize(l.CreatedBy), sanitize(l.UpdatedBy),
+			keep(l.CreatedAt), keep(l.UpdatedAt),
 		})
 	}
 	if err := cur.Err(); err != nil {
@@ -276,7 +310,7 @@ func copyVisits(
 			IP:      sanitize(v.IP),
 			UA:      sanitize(v.UA),
 			Referer: sanitize(v.Referer),
-			Time:    orNow(v.Time),
+			Time:    keep(v.Time),
 		}
 		m.Derive()
 
@@ -326,10 +360,15 @@ func sanitize(s string) string {
 	return strings.ToValidUTF8(s, "")
 }
 
-func orNow(t time.Time) time.Time {
-	if t.IsZero() {
-		return time.Now().UTC()
-	}
+// keep returns the stored timestamp unchanged.
+//
+// It does not substitute the current time for a missing one. 124 links
+// have no valid_from, 131 no created_at and 106 no updated_at, and the
+// zero value is meaningful: valid_from gates the redirect, so "always
+// valid" must not become "valid from the day of the migration", and
+// updated_at orders the admin index, which stamping every undated link
+// with the same instant would scramble.
+func keep(t time.Time) time.Time {
 	return t.UTC()
 }
 
@@ -342,6 +381,7 @@ func verify(
 	host string,
 	links, visits int64,
 	dryRun bool,
+	only string,
 ) error {
 	srcLinks, err := src.Database("redir").Collection("links").
 		CountDocuments(ctx, bson.M{})
@@ -354,10 +394,17 @@ func verify(
 		return fmt.Errorf("cannot count source visits: %w", err)
 	}
 
-	if srcLinks != links || srcVisits != visits {
-		return fmt.Errorf(
-			"copied %d links and %d visits, source holds %d and %d",
-			links, visits, srcLinks, srcVisits)
+	if only == "all" || only == "links" {
+		if srcLinks != links {
+			return fmt.Errorf("copied %d links, source holds %d",
+				links, srcLinks)
+		}
+	}
+	if only == "all" || only == "visits" {
+		if srcVisits != visits {
+			return fmt.Errorf("copied %d visits, source holds %d",
+				visits, srcVisits)
+		}
 	}
 	if dryRun {
 		log.Printf("dry run: source holds %d links and %d visits",
@@ -372,10 +419,13 @@ func verify(
 	).Scan(&dstLinks, &dstVisits); err != nil {
 		return fmt.Errorf("cannot count target: %w", err)
 	}
-	if dstLinks != srcLinks || dstVisits != srcVisits {
-		return fmt.Errorf(
-			"target holds %d links and %d visits, source holds %d and %d",
-			dstLinks, dstVisits, srcLinks, srcVisits)
+	if (only == "all" || only == "links") && dstLinks != srcLinks {
+		return fmt.Errorf("target holds %d links, source holds %d",
+			dstLinks, srcLinks)
+	}
+	if (only == "all" || only == "visits") && dstVisits != srcVisits {
+		return fmt.Errorf("target holds %d visits, source holds %d",
+			dstVisits, srcVisits)
 	}
 
 	log.Printf("verified %d links and %d visits", dstLinks, dstVisits)
