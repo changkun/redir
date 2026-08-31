@@ -569,3 +569,111 @@ func snapshot(ctx context.Context, t *testing.T, conn *pgx.Conn) string {
 	}
 	return s
 }
+
+// TestRunDoesNotTouchAnotherHostsVisits is a regression test for a
+// migration that emptied the whole visit table before a copy. That was
+// safe when the table held one site. Importing a second site would have
+// deleted the first site's history, which for redir was 348,435 rows.
+func TestRunDoesNotTouchAnotherHostsVisits(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+	var first int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1`, testHost,
+	).Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+	if first == 0 {
+		t.Fatal("nothing to protect")
+	}
+
+	// Import a second site, replacing whatever it had.
+	second := migrate.Options{Host: "other.example", Only: "all", Truncate: true}
+	if err := migrate.Run(ctx, seed(), targetURI(), second); err != nil {
+		t.Fatal(err)
+	}
+
+	var after int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1`, testHost,
+	).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after != first {
+		t.Fatalf("importing another site changed this one from %d visits to %d",
+			first, after)
+	}
+}
+
+// TestRunAppendClosesTheSwitchWindow covers the second pass.
+//
+// Between an import finishing and traffic moving to the new service, the
+// old one is still writing to its own store. Those visits are in neither
+// the target nor the import that already ran. An append pass takes a
+// source narrowed to them and adds them, rather than replacing rows the
+// new service has since recorded.
+func TestRunAppendClosesTheSwitchWindow(t *testing.T) {
+	ctx := context.Background()
+	schema(ctx, t)
+	conn := connect(ctx, t)
+
+	if err := migrate.Run(ctx, seed(), targetURI(), opts("all", true)); err != nil {
+		t.Fatal(err)
+	}
+
+	// A visit the new service recorded after the first pass. The append
+	// must not discard it.
+	if _, err := conn.Exec(ctx, `
+		INSERT INTO visits (host, alias, ip, time)
+		VALUES ($1, 'visited', '7.7.7.7', NOW())`, testHost); err != nil {
+		t.Fatal(err)
+	}
+
+	var before int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1`, testHost,
+	).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+
+	// A source narrowed to what arrived during the window.
+	late := &fakeSource{
+		links: seed().links,
+		visits: []migrate.Visit{
+			{Alias: "visited", IP: "5.5.5.5", UA: "curl/8.4.0",
+				Time: time.Now().UTC()},
+			{Alias: "visited", IP: "5.5.5.6", Time: time.Now().UTC()},
+		},
+	}
+	o := migrate.Options{Host: testHost, Only: "visits", Append: true}
+	if err := migrate.Run(ctx, late, targetURI(), o); err != nil {
+		t.Fatalf("append pass failed: %v", err)
+	}
+
+	var after int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1`, testHost,
+	).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after != before+2 {
+		t.Fatalf("visits went from %d to %d, want %d: the append either "+
+			"dropped rows or replaced them", before, after, before+2)
+	}
+
+	// The row recorded by the new service is still there.
+	var kept int64
+	if err := conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM visits WHERE host = $1 AND ip = '7.7.7.7'`,
+		testHost).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept != 1 {
+		t.Fatal("the append discarded a visit the new service had recorded")
+	}
+}

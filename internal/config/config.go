@@ -6,6 +6,7 @@ package config
 
 import (
 	"bytes"
+	"cmp"
 	_ "embed"
 	"log"
 	"net"
@@ -31,14 +32,18 @@ var (
 type config struct {
 	Title string `yaml:"title"`
 	Host  string `yaml:"host"`
-	// Hosts names further sites this instance serves. The store keys
-	// links by hostname, so each entry is a separate namespace of
-	// aliases. Empty means Host is the only site.
-	Hosts       []string `yaml:"hosts"`
-	Addr        string   `yaml:"addr"`
-	Development bool     `yaml:"development"`
-	Store       string   `yaml:"store"`
-	CORS        bool     `yaml:"cors"`
+	// Hosts are the further sites this instance serves, keyed by
+	// hostname. The store keys links by hostname, so each entry is a
+	// separate namespace of aliases. Empty means Host is the only site.
+	//
+	// An entry carries only what differs from the settings above. In
+	// practice that is the VCS organisation and whether the legal pages
+	// apply; everything else is shared.
+	Hosts       map[string]SiteOverride `yaml:"hosts"`
+	Addr        string                  `yaml:"addr"`
+	Development bool                    `yaml:"development"`
+	Store       string                  `yaml:"store"`
+	CORS        bool                    `yaml:"cors"`
 	S           struct {
 		Prefix string `yaml:"prefix"`
 	} `yaml:"s"`
@@ -81,6 +86,70 @@ type config struct {
 	} `yaml:"gdpr"`
 }
 
+// SiteOverride is what one additional site changes.
+type SiteOverride struct {
+	// RepoPath is the VCS root that /x/ import paths resolve to, and the
+	// organisation checkvcs probes when an alias is not found.
+	RepoPath string `yaml:"repo_path"`
+	// Legal reports whether the impressum, privacy and contact pages
+	// apply to this site. They name an operator, so they do not follow a
+	// process onto another domain by default.
+	Legal bool `yaml:"legal"`
+}
+
+// Site is the configuration that applies to one request, resolved from
+// its Host header.
+//
+// Almost nothing is per-site: the import path is built from the request,
+// the prefixes are shared, and the title is not rendered. Resolving it in
+// one place anyway keeps the handlers from reaching into the base
+// configuration for values that do differ.
+type Site struct {
+	// Host is the hostname the store keys this request's links by.
+	Host string
+	// RepoPath is the VCS root for this site.
+	RepoPath string
+	// ShowImpressum, ShowPrivacy and ShowContact gate the legal links.
+	ShowImpressum bool
+	ShowPrivacy   bool
+	ShowContact   bool
+}
+
+// SiteFor resolves a request's Host header to the site it belongs to.
+//
+// The header is chosen by the client and reaches the store as part of a
+// link's identity, so it is matched against the configured sites rather
+// than trusted. An unrecognised header falls back to the primary site,
+// which is what a health check, a direct address, or a local development
+// request sends.
+func (c *config) SiteFor(requestHost string) Site {
+	primary := Site{
+		Host:          c.Hostname(),
+		RepoPath:      c.X.RepoPath,
+		ShowImpressum: c.GDPR.Impressum.Enable,
+		ShowPrivacy:   c.GDPR.Privacy.Enable,
+		ShowContact:   c.GDPR.Contact.Enable,
+	}
+
+	n := NormalizeHost(requestHost)
+	if n == "" || n == primary.Host {
+		return primary
+	}
+	for name, o := range c.Hosts {
+		if n != NormalizeHost(name) {
+			continue
+		}
+		s := Site{Host: n, RepoPath: cmp.Or(o.RepoPath, c.X.RepoPath)}
+		if o.Legal {
+			s.ShowImpressum = c.GDPR.Impressum.Enable
+			s.ShowPrivacy = c.GDPR.Privacy.Enable
+			s.ShowContact = c.GDPR.Contact.Enable
+		}
+		return s
+	}
+	return primary
+}
+
 //go:embed config.yml
 var defaultConf []byte
 
@@ -94,29 +163,10 @@ func (c *config) Hostname() string {
 	return NormalizeHost(c.Host)
 }
 
-// ResolveHost maps a request's Host header to the site it belongs to.
-//
-// The header is chosen by the client, and it reaches the store as part of
-// a link's identity, so it is matched against the configured sites rather
-// than trusted. checkvcs creates links for unknown aliases, so an
-// unchecked header would let anyone write rows under any hostname.
-//
-// An unrecognised header falls back to the primary site, which is what a
-// health check, a direct address, or a local development request sends.
+// ResolveHost maps a request's Host header to the hostname the store keys
+// its links by. It is SiteFor reduced to that one field.
 func (c *config) ResolveHost(h string) string {
-	n := NormalizeHost(h)
-	if n == "" {
-		return c.Hostname()
-	}
-	if n == c.Hostname() {
-		return n
-	}
-	for _, k := range c.Hosts {
-		if n == NormalizeHost(k) {
-			return n
-		}
-	}
-	return c.Hostname()
+	return c.SiteFor(h).Host
 }
 
 // NormalizeHost reduces a Host header or a configured URL to the form the

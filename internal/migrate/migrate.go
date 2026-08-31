@@ -84,10 +84,14 @@ type Options struct {
 	// Host is recorded on every migrated row. Links are keyed by
 	// (host, alias), and a source predating that has no host of its own.
 	Host string
-	// Truncate empties the visit table first. Without it a non-empty
+	// Truncate removes this host's visits first. Without it a non-empty
 	// target is refused, because running a migration twice doubles every
 	// visit count and a doubled count looks plausible.
 	Truncate bool
+	// Append adds to what is already there, for a second pass whose
+	// source is already narrowed to the rows the first pass missed. It
+	// deletes nothing and skips the non-empty guard.
+	Append bool
 	// DryRun reads and counts, and writes nothing.
 	DryRun bool
 	// Only limits which tables are written: "all", "links" or "visits".
@@ -152,13 +156,16 @@ func Run(ctx context.Context, src Source, uri string, opts Options) error {
 // Links are not checked here: copyLinks replaces them for one host inside
 // a transaction, so they neither block a run nor need emptying first.
 func prepareTarget(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
-	if !opts.wants("visits") {
+	if !opts.wants("visits") || opts.Append {
 		return nil
 	}
 
+	// Scoped to this host. The table holds every site's visits, so
+	// emptying all of it to import one site would delete the others.
 	var visits int64
 	if err := pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM visits`).Scan(&visits); err != nil {
+		`SELECT COUNT(*) FROM visits WHERE host = $1`,
+		opts.Host).Scan(&visits); err != nil {
 		return fmt.Errorf("cannot inspect target: %w", err)
 	}
 	if visits == 0 {
@@ -166,18 +173,18 @@ func prepareTarget(ctx context.Context, pool *pgxpool.Pool, opts Options) error 
 	}
 	if !opts.Truncate {
 		return fmt.Errorf(
-			"target already holds %d visits; re-run with truncate to replace them",
-			visits)
+			"target already holds %d visits for %v; re-run with truncate to replace them",
+			visits, opts.Host)
 	}
 	if opts.DryRun {
-		log.Printf("dry run: would truncate %d visits", visits)
+		log.Printf("dry run: would remove %d visits for %v", visits, opts.Host)
 		return nil
 	}
 	if _, err := pool.Exec(ctx,
-		`TRUNCATE visits RESTART IDENTITY`); err != nil {
-		return fmt.Errorf("cannot truncate visits: %w", err)
+		`DELETE FROM visits WHERE host = $1`, opts.Host); err != nil {
+		return fmt.Errorf("cannot clear visits for %v: %w", opts.Host, err)
 	}
-	log.Printf("truncated %d visits", visits)
+	log.Printf("removed %d visits for %v", visits, opts.Host)
 	return nil
 }
 
@@ -380,7 +387,14 @@ func verify(
 		return fmt.Errorf("target holds %d links, source holds %d",
 			dstLinks, srcLinks)
 	}
-	if opts.wants("visits") && dstVisits != srcVisits {
+	// An append pass adds to rows that were already there, so the target
+	// is expected to hold at least what this pass supplied, not exactly.
+	switch {
+	case !opts.wants("visits"):
+	case opts.Append && dstVisits < srcVisits:
+		return fmt.Errorf("target holds %d visits, fewer than the %d appended",
+			dstVisits, srcVisits)
+	case !opts.Append && dstVisits != srcVisits:
 		return fmt.Errorf("target holds %d visits, source holds %d",
 			dstVisits, srcVisits)
 	}

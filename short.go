@@ -169,12 +169,13 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Figure out redirect location
-	host := config.Conf.ResolveHost(r.Host)
+	site := config.Conf.SiteFor(r.Host)
+	host := site.Host
 	red, ok := s.cache.Get(host, alias)
 	if !ok {
 		red, err = s.checkdb(ctx, host, alias)
 		if err != nil {
-			red, err = s.checkvcs(ctx, host, alias)
+			red, err = s.checkvcs(ctx, site, alias)
 			if err != nil {
 				return
 			}
@@ -186,9 +187,9 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 	if time.Now().UTC().Sub(red.ValidFrom.UTC()) < 0 {
 		err = waitTmpl.Execute(w, &pageInfo{
 			ValidFrom:     red.ValidFrom.UTC().Format("2006-01-02T15:04:05"),
-			ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-			ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-			ShowContact:   config.Conf.GDPR.Contact.Enable,
+			ShowImpressum: site.ShowImpressum,
+			ShowPrivacy:   site.ShowPrivacy,
+			ShowContact:   site.ShowContact,
 		})
 		return
 	}
@@ -215,9 +216,9 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 				OwnerName:     config.Conf.GDPR.Owner.Name,
 				OwnerDomain:   config.Conf.GDPR.Owner.Domain,
 				URL:           red.URL,
-				ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-				ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-				ShowContact:   config.Conf.GDPR.Contact.Enable,
+				ShowImpressum: site.ShowImpressum,
+				ShowPrivacy:   site.ShowPrivacy,
+				ShowContact:   site.ShowContact,
 			})
 			return
 		}
@@ -409,10 +410,14 @@ func (s *server) checkdb(ctx context.Context, host, alias string) (*models.Redir
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
 // then creates a new alias and returns url of the vcs repository.
-func (s *server) checkvcs(ctx context.Context, host, alias string) (*models.Redir, error) {
+func (s *server) checkvcs(ctx context.Context, site config.Site, alias string) (*models.Redir, error) {
+	host := site.Host
 
-	// construct the try path and make the request to vcs
-	repoPath := config.Conf.X.RepoPath
+	// The organisation probed is the one belonging to the site the
+	// request arrived on, not the process's primary site. A miss on
+	// golang.design must look for golang-design/<alias> and never
+	// changkun/<alias>, because a 200 here creates a link.
+	repoPath := site.RepoPath
 	repoPath = strings.TrimSuffix(repoPath, "/*")
 	tryPath := fmt.Sprintf("%s/%s", repoPath, alias)
 	resp, err := http.Get(tryPath)
@@ -468,6 +473,10 @@ func (s *server) sIndex(
 	w http.ResponseWriter,
 	r *http.Request,
 ) error {
+	// The legal pages name an operator, so they belong to the site that
+	// was asked for rather than to the process. See specs/004.
+	site := config.Conf.SiteFor(r.Host)
+
 	e := struct {
 		AdminView     bool
 		StatsMode     bool
@@ -480,9 +489,9 @@ func (s *server) sIndex(
 		AdminView:     false,
 		StatsMode:     config.Conf.Stats.Enable,
 		DevMode:       config.Conf.Development,
-		ShowImpressum: config.Conf.GDPR.Impressum.Enable,
-		ShowPrivacy:   config.Conf.GDPR.Privacy.Enable,
-		ShowContact:   config.Conf.GDPR.Contact.Enable,
+		ShowImpressum: site.ShowImpressum,
+		ShowPrivacy:   site.ShowPrivacy,
+		ShowContact:   site.ShowContact,
 		// Only a real session can be ended. Under basic auth the dashboard
 		// keeps its old reload-the-page behaviour.
 		LogoutURL: logoutURL(),
@@ -553,7 +562,8 @@ func (s *server) indexData(
 		pageNum = 1
 	}
 
-	rs, total, err := s.db.FetchAliasAll(ctx, config.Conf.ResolveHost(r.Host), public, int64(pageSize), int64(pageNum))
+	rs, total, err := s.db.FetchAliasAll(ctx, config.Conf.ResolveHost(r.Host),
+		public, int64(pageSize), int64(pageNum))
 	if err != nil {
 		return err
 	}

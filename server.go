@@ -61,9 +61,10 @@ func init() {
 	// We are not allow to use any additional routers.
 	// Replace all /static files to ./.static folder.
 	dtmpl = strings.Replace(dtmpl, "/static", "./.static", -1)
-}
 
-func newServer(ctx context.Context) *server {
+	// The templates are embedded constants, so parsing them depends on
+	// nothing at runtime. Doing it here rather than in newServer means a
+	// handler can be exercised without opening a database.
 	xTmpl = template.Must(template.New("xTmpl").Parse(xtmpl))
 	waitTmpl = template.Must(template.New("waitTmpl").Parse(waittmpl))
 	warnTmpl = template.Must(template.New("warnTmpl").Parse(warntmpl))
@@ -71,7 +72,9 @@ func newServer(ctx context.Context) *server {
 	privacyTmpl = template.Must(template.New("privacyTmpl").Parse(privacytmpl))
 	contactTmpl = template.Must(template.New("contactTmpl").Parse(contacttmpl))
 	dTmpl = template.Must(template.New("sTmpl").Parse(dtmpl))
+}
 
+func newServer(ctx context.Context) *server {
 	var err error
 	statics, err = fs.Sub(sasse, "dashboard/build/static")
 	if err != nil {
@@ -119,6 +122,10 @@ func (s *server) registerHandler() {
 // imports by checking out code from repoPath using the configured VCS.
 func (s *server) xHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		// The import path comes from the request, and the repository
+		// root from the site it belongs to: golang.design/x/foo must
+		// resolve to golang-design/foo, not changkun/foo.
+		site := config.Conf.SiteFor(req.Host)
 		importPath := strings.TrimSuffix(req.Host+config.Conf.X.Prefix, "/")
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
@@ -131,7 +138,7 @@ func (s *server) xHandler() http.HandlerFunc {
 			elem, suffix = elem[:i], elem[i:]
 		}
 		importRoot = importPath + "/" + elem
-		repoRoot = config.Conf.X.RepoPath + "/" + elem
+		repoRoot = site.RepoPath + "/" + elem
 
 		// Handling 'git clone https://changkun.de/x/repo'.
 		if suffix == "/info/refs" && strings.HasPrefix(req.URL.Query().Get("service"), "git-") && elem != "" {
