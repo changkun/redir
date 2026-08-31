@@ -367,6 +367,62 @@ Set `store` back to the `mongodb://` URI and restart. MongoDB has been
 running and unmodified throughout. The PostgreSQL data is left in place;
 re-running the migration needs `--truncate`.
 
+## Outcome
+
+Completed 2026-08-31. redir serves `changkun.de` from PostgreSQL on the
+shared instance. MongoDB is running, unmodified, and reachable by
+changing one line of configuration.
+
+### Verified on production
+
+| Check | Result |
+| --- | --- |
+| Rows copied | 184 links, 348,367 visits, verified against the source |
+| Per-alias PV/UV | all 184 aliases identical between the stores, diffed in full |
+| Orphans carried | 72,120, of which 68,965 are the index page |
+| Derived columns | 193,219 visits classified as bots, 160,787 with a referer host |
+| Null visitor ids | 11,213, exactly the count the source could not parse |
+| Endpoints | `/s/`, `/s/<alias>` (307), `/s/?mode=index`, `/x/` all serving |
+| MongoDB | 348,367 documents, unchanged, no writes after the copy |
+| Neighbours | urlstat and golang.design unaffected |
+
+### What went wrong
+
+**The migration invented timestamps.** A helper substituted the current
+time for a missing one, which rewrote 124 links' `valid_from`, 131
+`created_at` and 106 `updated_at` to the instant the migration ran.
+`valid_from` gates the redirect and `updated_at` orders the admin index,
+so neither is cosmetic. Caught by reading the index output after the
+cutover, and repaired with a links-only re-copy: visits carry no foreign
+key into links, so the link rows can be replaced while the visit history
+keeps growing.
+
+Writing that repair exposed a second fault in the tool. Emptying the
+table and refilling it leaves a window in which every alias looks
+missing, and `checkvcs` creates links for unresolved aliases, so a
+request arriving in that window could insert a row that then makes the
+copy fail on the unique constraint and leave the table empty. The
+replacement is now one transaction, scoped to the host being copied.
+
+The rule this leaves behind: **a migration may drop a value it cannot
+parse, but it may never replace one with a plausible substitute.** A
+missing timestamp that becomes today looks correct and is not.
+
+**No write freeze.** Between the copy finishing and the cutover, three
+and a half minutes passed with the server still writing to MongoDB. No
+visit arrived in that window, so nothing was lost, but that was traffic
+timing rather than design. A busier window would have dropped those rows
+silently. A cutover should either freeze writes or re-copy the delta.
+
+### Rules confirmed
+
+- `count()` on MongoDB 4.4 is a metadata estimate and disagreed with the
+  real count by four. Verify with `countDocuments`.
+- The session time zone decides what `date_trunc` means. It is pinned in
+  the pool rather than inherited from a shared instance.
+- Deploying the binary and switching the store URI were separate steps,
+  so a fault in either could only have one cause. Both were clean.
+
 ## Out of Scope
 
 - Changing what any number means, including the UV metric: `003`.
