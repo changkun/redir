@@ -42,16 +42,27 @@ var (
 // function leaves the stored values stale. Without this, visits recorded
 // before a rule changed are classified by the old rule and everything
 // since by the new one, and a single chart mixes the two.
+//
+// It covers every configured site. A rule change applies to all of them,
+// and re-deriving only the primary one leaves the others reading by the
+// old rule with nothing to say so.
 func runRederive() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
 		os.Interrupt, os.Kill)
 	defer cancel()
 
-	host := config.Conf.Hostname()
-	log.Printf("re-deriving visits for %v in %v", host,
-		db.Redact(config.Conf.Store))
-	if err := db.Rederive(ctx, config.Conf.Store, host); err != nil {
-		log.Fatalf("cannot re-derive visits: %v", err)
+	hosts := []string{config.Conf.Hostname()}
+	for name := range config.Conf.Hosts {
+		if h := config.NormalizeHost(name); h != "" && h != hosts[0] {
+			hosts = append(hosts, h)
+		}
+	}
+
+	log.Printf("re-deriving %v in %v", hosts, db.Redact(config.Conf.Store))
+	for _, host := range hosts {
+		if err := db.Rederive(ctx, config.Conf.Store, host); err != nil {
+			log.Fatalf("cannot re-derive visits for %v: %v", host, err)
+		}
 	}
 }
 
