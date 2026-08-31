@@ -14,6 +14,38 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+
+    # The store tests run against real databases rather than a mock,
+    # because the migration's whole claim is that two backends return the
+    # same numbers, and only real engines can show that.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: redir
+          POSTGRES_PASSWORD: redir
+          POSTGRES_DB: redir_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U redir"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mongo:
+        image: mongo:4.4
+        ports:
+          - 27018:27017
+        options: >-
+          --health-cmd "mongo --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      REDIR_TEST_POSTGRES: postgres://redir:redir@127.0.0.1:5432/redir_test?sslmode=disable
+      REDIR_TEST_MONGO: mongodb://127.0.0.1:27018
+
     steps:
 
     - name: Check out code into the Go module directory
@@ -43,10 +75,13 @@ jobs:
       run: |
         go vet ./...
 
+    # -p 1 because the store and migration tests share one database
+    # instance and both empty the tables; running their packages at the
+    # same time would make them fail for reasons unrelated to the code.
     - name: Race Test
       run: |
-        go test -v -race -count=1 ./...
+        go test -v -race -count=1 -p 1 ./...
 
     - name: Test
       run: |
-        go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+        go test -v -p 1 -coverprofile=coverage.txt -covermode=atomic ./...

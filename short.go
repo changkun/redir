@@ -376,7 +376,25 @@ func (s *server) recognizeVisitor(
 	if err != nil {
 		log.Printf("cannot record alias %s's visit: %v", alias, err)
 	} else {
-		w.Header().Set("Set-Cookie", redirVidCookie+"="+vid)
+		// Path matters here. The cookie used to be written as a raw
+		// header with no attributes, so it defaulted to the path of the
+		// request, /s/<alias>. A visitor arriving at a second alias
+		// therefore never sent it back and was issued another identity:
+		// 277,318 of 348,356 recorded visits invented a visitor. Scoping
+		// it to the site makes it identify a visitor rather than a
+		// visit.
+		//
+		// It stays a session cookie. Giving it a lifetime would change
+		// what the numbers mean, and UV counts addresses today; see
+		// specs/003-enriched-stats.md.
+		http.SetCookie(w, &http.Cookie{
+			Name:     redirVidCookie,
+			Value:    vid,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   !config.Conf.Development,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
 }
 
