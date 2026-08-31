@@ -72,10 +72,27 @@ type VisitRecord struct {
 	PV    int64  `json:"pv"`
 }
 
-// Referrer statistic
-type RefStat struct {
-	Referer string `json:"referer"`
-	Count   int64  `json:"count"`
+// NameCount is one bucket of a grouped statistic: a referring host, a
+// browser, an operating system or a device kind, and how many visits fell
+// into it.
+//
+// The grouping happens in the database. The dashboard used to receive
+// every distinct user agent string and bucket them in the browser on each
+// load, which sent the raw strings over the wire only to discard most of
+// them.
+type NameCount struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// BotStat is how much automated traffic a range holds.
+//
+// The stats exclude bots from every figure they show, so this reports
+// what was left out. An exclusion nobody can see is indistinguishable
+// from missing data.
+type BotStat struct {
+	PV int64 `json:"pv"`
+	UV int64 `json:"uv"`
 }
 
 // UAStat statistics

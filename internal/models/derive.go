@@ -25,7 +25,7 @@ func (v *Visit) Derive() {
 	v.RefererHost = refererHost(v.Referer)
 
 	ua := useragent.Parse(v.UA)
-	v.IsBot = ua.Bot || isBot(ua.Name, v.UA)
+	v.IsBot = ua.Bot || isBot(ua, v.UA)
 	v.Browser = ua.Name
 	v.OS = ua.OS
 	v.Device = deviceKind(ua, v.IsBot)
@@ -53,8 +53,8 @@ var botMarkers = []string{
 
 // isBot supplements the parser rather than replacing it. The parser is
 // right about what it does flag; it is only incomplete.
-func isBot(name, raw string) bool {
-	if httpClients[name] {
+func isBot(ua useragent.UserAgent, raw string) bool {
+	if httpClients[ua.Name] {
 		return true
 	}
 	lower := strings.ToLower(raw)
@@ -63,7 +63,24 @@ func isBot(name, raw string) bool {
 			return true
 		}
 	}
-	return false
+	return namedButPlatformless(ua)
+}
+
+// namedButPlatformless catches agents that identify themselves but claim
+// no platform, such as "Mozilla/5.0 (compatible; Dataprovider.com)".
+//
+// A browser runs on something, and the parser recognises every platform a
+// browser reports. An agent that gives a name while reporting no
+// operating system and no device is announcing a tool, not a person, and
+// it is the shape every crawler too obscure to be in a list arrives in.
+// Matching on the shape rather than on names means the next one is caught
+// without an edit.
+//
+// The name must be present: an empty user agent says nothing either way
+// and is left alone.
+func namedButPlatformless(ua useragent.UserAgent) bool {
+	return ua.Name != "" && ua.OS == "" &&
+		!ua.Mobile && !ua.Tablet && !ua.Desktop
 }
 
 // refererHost reduces a referer to its hostname, so that one referring

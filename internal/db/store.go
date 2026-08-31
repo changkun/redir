@@ -45,11 +45,17 @@ type Store interface {
 	// a cookie.
 	RecordVisit(ctx context.Context, v *models.Visit) (string, error)
 
-	// StatReferer counts visits per referer within [start, end).
-	StatReferer(ctx context.Context, host, alias string, start, end time.Time) ([]models.RefStat, error)
-	// StatUA counts visits per user agent within [start, end).
+	// StatGroup counts non-bot visits within [start, end), grouped by one
+	// derived column: referer, browser, os or device.
+	StatGroup(ctx context.Context, host, alias, by string, start, end time.Time) ([]models.NameCount, error)
+	// StatBots reports the automated traffic the other statistics leave
+	// out, so the exclusion is visible rather than silent.
+	StatBots(ctx context.Context, host, alias string, start, end time.Time) (models.BotStat, error)
+	// StatUA counts visits per raw user agent within [start, end), bots
+	// included. Nothing draws it; it is how a suspicious entry in the
+	// grouped statistics is inspected.
 	StatUA(ctx context.Context, host, alias string, start, end time.Time) ([]models.UAStat, error)
-	// StatVisitHist counts PV and UV per hour within [start, end).
+	// StatVisitHist counts non-bot PV and UV per hour within [start, end).
 	StatVisitHist(ctx context.Context, host, alias string, start, end time.Time) ([]models.TimeHist, error)
 	// StatVisit counts PV and UV for the given aliases.
 	StatVisit(ctx context.Context, host string, aliases []string) ([]models.VisitRecord, error)

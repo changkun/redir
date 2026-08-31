@@ -271,49 +271,109 @@ func (db *pgStore) RecordVisit(ctx context.Context, v *models.Visit) (string, er
 	return v.VisitorID, nil
 }
 
-// joinVisits is the FROM clause every stat query shares.
+// nonBotVisits is the FROM clause the displayed statistics share.
 //
 // The join to links is not decoration. 21% of the visit rows have an alias
 // that is not a link: the index page records an empty alias, and a visit
 // is recorded before the alias is resolved, so 404s are counted too.
 // Querying visits alone would report all of them as traffic to aliases
 // that do not exist.
-const joinVisits = `
+//
+// Bots are excluded here rather than in each query, so that every figure
+// on the stats page counts the same population. They were previously
+// dropped from two charts and kept in the rest, which left the charts on
+// one page disagreeing with each other. StatBots reports what this
+// removes.
+const nonBotVisits = `
 	FROM links l
 	JOIN visits v ON v.host = l.host AND v.alias = l.alias
-	WHERE l.host = $1 AND l.alias = $2 AND v.time >= $3 AND v.time < $4`
+	WHERE l.host = $1 AND l.alias = $2
+	  AND v.time >= $3 AND v.time < $4
+	  AND NOT v.is_bot`
 
-func (db *pgStore) StatReferer(
+// groupable are the columns a grouped statistic may count over.
+//
+// The column name is concatenated into the query, so it comes from this
+// map and never from the request. The value is what an empty column
+// reports as: an absent referring host is a direct visit, and an
+// unidentified browser is unknown rather than blank.
+var groupable = map[string]string{
+	"referer": "Direct",
+	"browser": "Unknown",
+	"os":      "Unknown",
+	"device":  "Unknown",
+}
+
+// column maps a stat mode to the column holding it. referer groups by
+// host rather than by full URL, so one referring page with varying query
+// parameters is one row instead of many.
+var column = map[string]string{
+	"referer": "referer_host",
+	"browser": "browser",
+	"os":      "os",
+	"device":  "device",
+}
+
+// StatGroup counts non-bot visits grouped by one derived column.
+func (db *pgStore) StatGroup(
 	ctx context.Context,
-	host, alias string,
+	host, alias, by string,
 	start, end time.Time,
-) ([]models.RefStat, error) {
-	// The empty referer is reported as "unknown" because the dashboard
-	// matches that exact string to label a visit as direct. Both sides
-	// change together; see specs/003-enriched-stats.md.
+) ([]models.NameCount, error) {
+	empty, ok := groupable[by]
+	if !ok {
+		return nil, fmt.Errorf("cannot group visits by %q", by)
+	}
+
 	rows, err := db.pool.Query(ctx, `
-		SELECT CASE WHEN v.referer = '' THEN 'unknown' ELSE v.referer END AS referer,
-		       COUNT(*) AS count`+joinVisits+`
-		GROUP BY 1 ORDER BY count DESC`, host, alias, start, end)
+		SELECT CASE WHEN v.`+column[by]+` = '' THEN '`+empty+`'
+		            ELSE v.`+column[by]+` END AS name,
+		       COUNT(*) AS count`+nonBotVisits+`
+		GROUP BY 1 ORDER BY count DESC, name`, host, alias, start, end)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count referer: %w", err)
+		return nil, fmt.Errorf("failed to count %v: %w", by, err)
 	}
 	defer rows.Close()
 
-	var rs []models.RefStat
+	var rs []models.NameCount
 	for rows.Next() {
-		var r models.RefStat
-		if err := rows.Scan(&r.Referer, &r.Count); err != nil {
-			return nil, fmt.Errorf("failed to fetch referer results: %w", err)
+		var r models.NameCount
+		if err := rows.Scan(&r.Name, &r.Count); err != nil {
+			return nil, fmt.Errorf("failed to fetch %v results: %w", by, err)
 		}
 		rs = append(rs, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to fetch referer results: %w", err)
+		return nil, fmt.Errorf("failed to fetch %v results: %w", by, err)
 	}
 	return rs, nil
 }
 
+// StatBots reports the traffic the other statistics leave out.
+func (db *pgStore) StatBots(
+	ctx context.Context,
+	host, alias string,
+	start, end time.Time,
+) (models.BotStat, error) {
+	var b models.BotStat
+	err := db.pool.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(DISTINCT v.ip)
+		FROM links l
+		JOIN visits v ON v.host = l.host AND v.alias = l.alias
+		WHERE l.host = $1 AND l.alias = $2
+		  AND v.time >= $3 AND v.time < $4
+		  AND v.is_bot`, host, alias, start, end).Scan(&b.PV, &b.UV)
+	if err != nil {
+		return models.BotStat{}, fmt.Errorf("failed to count bots: %w", err)
+	}
+	return b, nil
+}
+
+// StatUA counts visits per raw user agent string, bots included.
+//
+// Nothing on the dashboard draws this. It is how a suspicious entry in the
+// grouped statistics gets looked at, which needs the string the grouping
+// was derived from.
 func (db *pgStore) StatUA(
 	ctx context.Context,
 	host, alias string,
@@ -321,8 +381,12 @@ func (db *pgStore) StatUA(
 ) ([]models.UAStat, error) {
 	rows, err := db.pool.Query(ctx, `
 		SELECT CASE WHEN v.ua = '' THEN 'unknown' ELSE v.ua END AS ua,
-		       COUNT(*) AS count`+joinVisits+`
-		GROUP BY 1 ORDER BY count DESC`, host, alias, start, end)
+		       COUNT(*) AS count
+		FROM links l
+		JOIN visits v ON v.host = l.host AND v.alias = l.alias
+		WHERE l.host = $1 AND l.alias = $2
+		  AND v.time >= $3 AND v.time < $4
+		GROUP BY 1 ORDER BY count DESC, ua`, host, alias, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count ua: %w", err)
 	}
@@ -342,7 +406,8 @@ func (db *pgStore) StatUA(
 	return rs, nil
 }
 
-// StatVisitHist buckets by hour.
+// StatVisitHist buckets by hour, over non-bot visits. The index listing
+// still counts all traffic; StatBots reports the difference.
 func (db *pgStore) StatVisitHist(
 	ctx context.Context,
 	host, alias string,
@@ -351,7 +416,7 @@ func (db *pgStore) StatVisitHist(
 	rows, err := db.pool.Query(ctx, `
 		SELECT date_trunc('hour', v.time) AS bucket,
 		       COUNT(*) AS pv,
-		       COUNT(DISTINCT v.ip) AS uv`+joinVisits+`
+		       COUNT(DISTINCT v.ip) AS uv`+nonBotVisits+`
 		GROUP BY bucket ORDER BY bucket`, host, alias, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count time hist: %w", err)

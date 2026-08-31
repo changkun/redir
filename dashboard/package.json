@@ -16,8 +16,7 @@
     "antd": "^5.29.3",
     "dayjs": "^1.11.23",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "ua-parser-js": "^1.0.41"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",

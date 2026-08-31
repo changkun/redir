@@ -299,7 +299,7 @@ func TestStatsOnUnknownAliasAreEmpty(t *testing.T) {
 		now := time.Now().UTC()
 		from, to := now.Add(-time.Hour), now.Add(time.Hour)
 
-		refs, err := s.StatReferer(ctx, khost, "no-such-alias", from, to)
+		refs, err := s.StatGroup(ctx, khost, "no-such-alias", "referer", from, to)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -454,7 +454,7 @@ func TestStatsAcrossHostsDoNotMix(t *testing.T) {
 		}
 
 		from, to := now.Add(-time.Hour), now.Add(time.Hour)
-		refs, err := s.StatReferer(ctx, khost, kalias, from, to)
+		refs, err := s.StatGroup(ctx, khost, kalias, "referer", from, to)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -492,8 +492,12 @@ func TestCancelledContextIsAnError(t *testing.T) {
 		from, to := now.Add(-time.Hour), now.Add(time.Hour)
 
 		for name, call := range map[string]func() error{
-			"StatReferer": func() error {
-				_, err := s.StatReferer(ctx, khost, kalias, from, to)
+			"StatGroup": func() error {
+				_, err := s.StatGroup(ctx, khost, kalias, "referer", from, to)
+				return err
+			},
+			"StatBots": func() error {
+				_, err := s.StatBots(ctx, khost, kalias, from, to)
 				return err
 			},
 			"StatUA": func() error {

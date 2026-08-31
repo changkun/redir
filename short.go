@@ -606,26 +606,22 @@ func (s *server) statData(
 	host := config.Conf.ResolveHost(r.Host)
 	var results any
 	switch stat {
-	case "referer":
-		results, err = s.db.StatReferer(ctx, host, a, start, end)
-		if err != nil {
-			retErr = err
-			return
-		}
+	// The grouped modes share one query. Everything they draw excludes
+	// bots, so the figures on the page count the same population.
+	case "referer", "browser", "os", "device":
+		results, err = s.db.StatGroup(ctx, host, a, stat, start, end)
+	case "bots":
+		results, err = s.db.StatBots(ctx, host, a, start, end)
 	case "ua":
 		results, err = s.db.StatUA(ctx, host, a, start, end)
-		if err != nil {
-			retErr = err
-			return
-		}
 	case "time":
 		results, err = s.db.StatVisitHist(ctx, host, a, start, end)
-		if err != nil {
-			retErr = err
-			return
-		}
 	default:
 		retErr = fmt.Errorf("%s stat mode is not supported", stat)
+		return
+	}
+	if err != nil {
+		retErr = err
 		return
 	}
 

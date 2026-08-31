@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,8 +93,12 @@ func seed() *fakeSource {
 			{Alias: "never-existed", IP: "1.2.3.8", Time: now},
 			// The index page.
 			{Alias: "", IP: "1.2.3.9", Time: now},
-			// A NUL byte, which a postgres text column rejects.
-			{Alias: "visited", IP: "1.2.3.10", UA: "bad\x00ua", Time: now},
+			// A NUL byte, which a postgres text column rejects. The
+			// agent is otherwise a real browser, so this row tests
+			// the stripping and nothing else.
+			{Alias: "visited", IP: "1.2.3.10",
+				UA:   "Mozilla/5.0 (Windows NT 10.0; Win64; x64)\x00 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+				Time: now},
 		},
 	}
 }
@@ -162,15 +167,22 @@ func TestRun(t *testing.T) {
 		t.Errorf("%d preserved visitor ids, want 2", kept)
 	}
 
-	// The NUL byte is gone and the rest of the string survived.
-	var ua string
+	// The NUL byte is gone and the rest of the string survived, so the
+	// agent still parses as the browser it names.
+	var ua, browser string
 	if err := conn.QueryRow(ctx,
-		`SELECT ua FROM visits WHERE host = $1 AND ip = '1.2.3.10'`,
-		testHost).Scan(&ua); err != nil {
+		`SELECT ua, browser FROM visits WHERE host = $1 AND ip = '1.2.3.10'`,
+		testHost).Scan(&ua, &browser); err != nil {
 		t.Fatal(err)
 	}
-	if ua != "badua" {
-		t.Errorf("ua = %q, want badua", ua)
+	if strings.ContainsRune(ua, 0) {
+		t.Errorf("ua = %q, still holds a NUL byte", ua)
+	}
+	if !strings.HasPrefix(ua, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit") {
+		t.Errorf("ua = %q, the string did not survive stripping", ua)
+	}
+	if browser != "Chrome" {
+		t.Errorf("browser = %q, want Chrome", browser)
 	}
 
 	// The derived columns are filled by the code the server uses.

@@ -26,6 +26,11 @@ func TestDeriveBot(t *testing.T) {
 		{"yandex", "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)", true},
 		{"curl", "curl/8.4.0", true},
 		{"chrome", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", false},
+		// Names itself but claims no platform. A browser runs on
+		// something, so this shape is a tool, and it is how crawlers too
+		// obscure for any list arrive.
+		{"named without a platform", "Mozilla/5.0 (compatible; Dataprovider.com)", true},
+		{"link checker", "lychee/0.8.0", true},
 		{"safari ios", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,10 +87,33 @@ func TestDeriveRefererHost(t *testing.T) {
 
 // TestDeriveEmptyUA checks that an absent user agent, which 8,205
 // production rows have, does not become a bot or a fabricated browser.
+//
+// It says nothing either way, so the platformless rule deliberately does
+// not apply to it: that rule needs a name to act on.
 func TestDeriveEmptyUA(t *testing.T) {
 	v := &models.Visit{}
 	v.Derive()
 	if v.IsBot || v.Browser != "" || v.OS != "" || v.Device != "" {
 		t.Fatalf("empty UA derived %+v, want all zero", v)
+	}
+}
+
+// TestDerivePlatformlessRuleSparesRealBrowsers checks the rule does not
+// reach browsers that do report a platform, which is the way it could do
+// damage: quietly reclassifying people as bots.
+func TestDerivePlatformlessRuleSparesRealBrowsers(t *testing.T) {
+	for _, ua := range []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+		"Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+		"Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+		"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+	} {
+		v := &models.Visit{UA: ua}
+		v.Derive()
+		if v.IsBot {
+			t.Errorf("a browser reporting a platform was called a bot: %.60s", ua)
+		}
 	}
 }

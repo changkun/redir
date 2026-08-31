@@ -3,14 +3,12 @@
 // license that can be found in the LICENSE file.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Row, Col, Divider, DatePicker } from 'antd'
+import { Row, Col, Divider, DatePicker, Typography } from 'antd'
 import { PageHeader } from '@ant-design/pro-components'
 import { Line, Pie, Bar } from '@ant-design/charts'
-import UAParser from 'ua-parser-js'
 import dayjs from 'dayjs'
 import { day, dayBuckets, defaultRange } from '../lib/time'
-
-const uaparser = new UAParser()
+import { botsExcluded, topN } from '../lib/stats'
 
 // charts v2 renders through G2 5, whose dark palette is named classicDark.
 const chartTheme = 'classicDark'
@@ -22,11 +20,12 @@ const Stats = (props) => {
 
   const [pvuvData, setPVUVData] = useState([])
   const [refData, setRefData] = useState([])
-  const [uaData, setUAData] = useState([])
+  const [browserData, setBrowserData] = useState([])
+  const [osData, setOSData] = useState([])
+  const [deviceData, setDeviceData] = useState([])
+  const [bots, setBots] = useState(null)
 
-  const endpoint = props.devMode
-    ? 'http://localhost:9123/s/?'
-    : '/s/?'
+  const endpoint = props.devMode ? 'http://localhost:9123/s/?' : '/s/?'
 
   const fetchStat = useCallback(
     (stat, from, to, set) => {
@@ -47,11 +46,16 @@ const Stats = (props) => {
     [endpoint, props.alias],
   )
 
+  // Every series is grouped and ordered by the server. The browser no
+  // longer parses user agents: the counts arrive ready to draw.
   const fetchAll = useCallback(
     (from, to) => {
       fetchStat('time', from, to, setPVUVData)
       fetchStat('referer', from, to, setRefData)
-      fetchStat('ua', from, to, setUAData)
+      fetchStat('browser', from, to, setBrowserData)
+      fetchStat('os', from, to, setOSData)
+      fetchStat('device', from, to, setDeviceData)
+      fetchStat('bots', from, to, setBots)
     },
     [fetchStat],
   )
@@ -64,24 +68,7 @@ const Stats = (props) => {
     fetchAll(dateString[0], dateString[1])
   }
 
-  // Group the per-user-agent counts into browser and device totals,
-  // dropping bots and entries the parser cannot identify.
-  const browsers = {}
-  const devices = {}
-  for (const entry of uaData) {
-    if (entry.ua.includes('bot') || entry.ua.includes('unknown')) {
-      continue
-    }
-    const r = uaparser.setUA(entry.ua).getResult()
-    const browser = r.browser.name ?? 'Others'
-    const device = r.os.name ?? 'Others'
-    browsers[browser] = (browsers[browser] ?? 0) + entry.count
-    devices[device] = (devices[device] ?? 0) + entry.count
-  }
-  const byCount = (o) =>
-    Object.entries(o)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
+  const excluded = botsExcluded(bots)
 
   return (
     <div className="redir-stats">
@@ -93,21 +80,30 @@ const Stats = (props) => {
       />
       <Divider />
       <StatLine data={pvuvData} t0={t0} t1={t1} />
+      {excluded && (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
+          {excluded}
+        </Typography.Paragraph>
+      )}
       <Row>
         <Col span={12}>
           <PageHeader className="site-page-header" title="Referrers" />
-          <StatPieRef data={refData} />
+          <StatPie data={topN(refData)} />
         </Col>
         <Col span={12}>
           <PageHeader className="site-page-header" title="Browsers" />
-          <StatBarUA data={byCount(browsers)} />
+          <StatBar data={topN(browserData)} />
         </Col>
       </Row>
       <Divider />
       <Row>
-        <Col span={24}>
+        <Col span={12}>
+          <PageHeader className="site-page-header" title="Operating systems" />
+          <StatBar data={topN(osData)} />
+        </Col>
+        <Col span={12}>
           <PageHeader className="site-page-header" title="Devices" />
-          <StatBarUA data={byCount(devices)} />
+          <StatBar data={topN(deviceData)} />
         </Col>
       </Row>
       <Divider />
@@ -149,13 +145,10 @@ const StatLine = (props) => {
   )
 }
 
-const StatPieRef = (props) => (
+const StatPie = (props) => (
   <Pie
     theme={chartTheme}
-    data={props.data.map((entry) => ({
-      name: entry.referer === 'unknown' ? 'Direct' : entry.referer,
-      value: entry.count,
-    }))}
+    data={props.data}
     angleField="value"
     colorField="name"
     radius={0.8}
@@ -171,7 +164,7 @@ const StatPieRef = (props) => (
 // Bar in charts v2 is an interval mark on a transposed coordinate, so the
 // category goes on xField and the measure on yField. This is the reverse
 // of the v1 API.
-const StatBarUA = (props) => (
+const StatBar = (props) => (
   <Bar
     theme={chartTheme}
     data={props.data}

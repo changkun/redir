@@ -19,6 +19,21 @@ import (
 const (
 	kalias = "alias"
 	khost  = "test.example"
+
+	// chromeUA and botUA are a person and a crawler. The statistics
+	// count them differently, so a test that leaves the user agent empty
+	// is not exercising either path.
+	chromeUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	botUA = "Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)"
+	// amazonBotUA announces itself as Safari on macOS and is a crawler,
+	// which the dashboard's old substring test for "bot" missed.
+	amazonBotUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) " +
+		"AppleWebKit/600.2.5 (KHTML, like Gecko) Version/8.0.2 " +
+		"Safari/600.2.5 (Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)"
+	firefoxUA = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0"
+	iphoneUA  = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+		"AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 )
 
 // storeURI names the database the store tests run against. They run
@@ -331,36 +346,75 @@ func TestHostsAreSeparate(t *testing.T) {
 	})
 }
 
-func TestStatRefererAndUA(t *testing.T) {
+// TestStatRefererGroupsByHost checks that referrers collapse to their
+// host. One referring page with varying query parameters used to become
+// one row per variant, which made the chart unreadable and the top
+// referrer look smaller than it was.
+func TestStatRefererGroupsByHost(t *testing.T) {
 	run(t, func(t *testing.T, s db.Store) {
 		ctx := context.Background()
 		now := time.Now().UTC()
 
-		for _, ref := range []string{"https://news.ycombinator.com/x", "", ""} {
+		refs := []string{
+			"https://news.ycombinator.com/item?id=1",
+			"https://news.ycombinator.com/item?id=2",
+			"https://news.ycombinator.com/",
+			"", "",
+		}
+		for _, ref := range refs {
 			if _, err := s.RecordVisit(ctx, &models.Visit{
 				Host: khost, Alias: kalias, IP: "1.2.3.4",
-				Referer: ref, UA: "", Time: now,
+				Referer: ref, UA: chromeUA, Time: now,
 			}); err != nil {
 				t.Fatal(err)
 			}
 		}
 
-		refs, err := s.StatReferer(ctx, khost, kalias,
+		got, err := s.StatGroup(ctx, khost, kalias, "referer",
 			now.Add(-time.Hour), now.Add(time.Hour))
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := map[string]int64{}
-		for _, r := range refs {
-			got[r.Referer] = r.Count
+
+		counts := map[string]int64{}
+		var total int64
+		for _, r := range got {
+			counts[r.Name] = r.Count
+			total += r.Count
 		}
-		// The empty referer is reported as "unknown": the dashboard
-		// matches that exact string.
-		if got["unknown"] != 2 {
-			t.Fatalf("unknown referer count = %d, want 2 (%+v)", got["unknown"], refs)
+		// Three pages on one site are one row.
+		if counts["news.ycombinator.com"] != 3 {
+			t.Errorf("news.ycombinator.com = %d, want 3 (%+v)", counts["news.ycombinator.com"], got)
 		}
-		if got["https://news.ycombinator.com/x"] != 1 {
-			t.Fatalf("referer counts = %+v", refs)
+		// An absent referrer is a direct visit, named as such rather
+		// than left blank for the dashboard to relabel.
+		if counts["Direct"] != 2 {
+			t.Errorf("Direct = %d, want 2 (%+v)", counts["Direct"], got)
+		}
+		if len(got) != 2 {
+			t.Errorf("got %d rows, want 2 (%+v)", len(got), got)
+		}
+		// Collapsing rows must not lose visits.
+		if total != int64(len(refs)) {
+			t.Errorf("counts sum to %d, want %d", total, len(refs))
+		}
+	})
+}
+
+// TestStatUAKeepsRawStrings checks the inspection mode still returns the
+// strings the grouping was derived from, bots included.
+func TestStatUAKeepsRawStrings(t *testing.T) {
+	run(t, func(t *testing.T, s db.Store) {
+		ctx := context.Background()
+		now := time.Now().UTC()
+
+		for _, ua := range []string{chromeUA, botUA, ""} {
+			if _, err := s.RecordVisit(ctx, &models.Visit{
+				Host: khost, Alias: kalias, IP: "1.2.3.4",
+				UA: ua, Time: now,
+			}); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		uas, err := s.StatUA(ctx, khost, kalias,
@@ -368,8 +422,17 @@ func TestStatRefererAndUA(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(uas) != 1 || uas[0].UA != "unknown" || uas[0].Count != 3 {
-			t.Fatalf("ua stats = %+v, want one unknown row with count 3", uas)
+		if len(uas) != 3 {
+			t.Fatalf("got %d rows, want 3 including the bot (%+v)", len(uas), uas)
+		}
+		var found bool
+		for _, u := range uas {
+			if u.UA == botUA {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("the raw listing dropped the bot, which is what it exists to show")
 		}
 	})
 }
