@@ -155,10 +155,10 @@ func prepareTarget(
 
 	// Only the tables about to be written matter. A links-only repair
 	// must not be blocked by, or destroy, the visit rows.
+	// links are replaced per host inside copyLinks, atomically, so they
+	// never block or need this.
 	inWay := map[string]int64{}
-	if (only == "all" || only == "links") && links > 0 {
-		inWay["links"] = links
-	}
+	_ = links
 	if (only == "all" || only == "visits") && visits > 0 {
 		inWay["visits"] = visits
 	}
@@ -235,13 +235,34 @@ func copyLinks(
 	if dryRun {
 		return int64(len(rows)), nil
 	}
-	n, err := pool.CopyFrom(ctx,
+
+	// Replace the rows for this host inside one transaction. Emptying
+	// the table first and filling it afterwards would leave a window in
+	// which every alias looks missing: checkvcs creates links for
+	// unresolved aliases, so a request landing in that window could
+	// insert a row that then makes this copy fail on the unique
+	// constraint. Within a transaction, readers see the old rows until
+	// the new ones are committed.
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("cannot begin link copy: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM links WHERE host = $1`, host); err != nil {
+		return 0, fmt.Errorf("cannot clear links for %v: %w", host, err)
+	}
+	n, err := tx.CopyFrom(ctx,
 		pgx.Identifier{"links"},
 		[]string{"host", "alias", "url", "private", "trust", "valid_from",
 			"created_by", "updated_by", "created_at", "updated_at"},
 		pgx.CopyFromRows(rows))
 	if err != nil {
 		return 0, fmt.Errorf("cannot write links: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("cannot commit link copy: %w", err)
 	}
 	return n, nil
 }
