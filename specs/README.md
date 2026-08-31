@@ -22,6 +22,7 @@ two candidate causes and neither could be ruled out.
 | [002-postgres-store.md](002-postgres-store.md) | Complete | Replace the MongoDB store with PostgreSQL and copy the data across, with every stat unchanged and MongoDB untouched |
 | [003-enriched-stats.md](003-enriched-stats.md) | Planned | Spend the enriched columns: group user agents and referrers in SQL, exclude bots consistently, drop the client-side parser |
 | [004-unify-golang-design.md](004-unify-golang-design.md) | Planned | Fold the diverged golang.design/redir deployment into this codebase as a second host and retire its service |
+| [005-drop-mongodb.md](005-drop-mongodb.md) | Planned | Remove the MongoDB backend and stop the container, with v0.7.0 as the release to return to |
 
 ## Status
 
@@ -35,15 +36,21 @@ two candidate causes and neither could be ruled out.
 | 002-postgres-store | ● |
 | 003-enriched-stats | ○ |
 | 004-unify-golang-design | ○ |
+| 005-drop-mongodb | ○ |
 
 ## Dependencies
 
 ```
                               ┌──> 003-enriched-stats
-001-shared-postgres ──> 002-postgres-store
+001-shared-postgres ──> 002-postgres-store ──> 005-drop-mongodb
                               └──> 004-unify-golang-design
 ```
 
-002 needs an instance both services can reach. 003 and 004 both need the
-schema 002 introduces, and are independent of each other: 003 changes how
-visits are counted, 004 adds a second host. Either may land first.
+002 needs an instance both services can reach. 003, 004 and 005 all need
+what 002 introduces and are independent of each other: 003 changes how
+visits are counted, 004 adds a second host, 005 removes the old backend.
+Any may land first.
+
+005 gives up the one-line rollback 002 built, in exchange for one store
+and one set of tests. The rollback moves to the `v0.7.0` release rather
+than disappearing.
