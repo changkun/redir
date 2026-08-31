@@ -24,13 +24,18 @@ COPY . .
 COPY --from=dashboard /src/dashboard/build ./dashboard/build
 ARG VERSION=dev
 RUN echo "$VERSION" > internal/version/.version && \
-    CGO_ENABLED=0 go build -o /redir
+    CGO_ENABLED=0 go build -o /redir && \
+    CGO_ENABLED=0 go build -o /redir-migrate ./cmd/migrate
 
 FROM alpine:3.22
 # Signing in calls the auth service over TLS, which needs a trust store.
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=server /redir ./redir
+# The data migration runs from this image rather than from a toolchain on
+# the host: it must derive its columns with exactly the code the server
+# uses, and a separately built copy could drift from it.
+COPY --from=server /redir-migrate ./redir-migrate
 # The deployment config is mounted at /app/data/redirconf.yml rather than
 # copied in: it holds credentials, and baking it in would put them in
 # every layer of a shared image. See docker-compose.yml.

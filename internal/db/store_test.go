@@ -7,6 +7,7 @@ package db_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -469,5 +470,59 @@ func BenchmarkFetchAliasAll(b *testing.B) {
 		if err != nil || len(rs) == 0 || total == 0 {
 			b.Fatalf("fetch failed: %v, %v, %v", err, rs, total)
 		}
+	}
+}
+
+// TestHistBucketsAreUTC pins the hour boundary.
+//
+// time is timestamptz and date_trunc truncates in the session time zone,
+// so an instance configured for another zone would shift every bucket.
+// The MongoDB pipelines truncate in UTC unconditionally. The store sets
+// the session zone rather than inheriting it, and this asks for the
+// opposite zone in the URI to prove the setting wins.
+func TestHistBucketsAreUTC(t *testing.T) {
+	ctx := context.Background()
+	b := backends()[0]
+
+	uri := b.uri
+	if strings.Contains(uri, "?") {
+		uri += "&timezone=Asia/Kolkata"
+	} else {
+		uri += "?timezone=Asia/Kolkata"
+	}
+	s, err := db.NewStore(ctx, uri)
+	if err != nil {
+		t.Skipf("cannot connect to postgres: %v", err)
+	}
+	defer s.Close()
+	b.reset(ctx, t)
+
+	if err := s.StoreAlias(ctx, &models.Redir{
+		Host: khost, Alias: kalias, URL: "link",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 23:30 UTC is 05:00 the next day in Kolkata, which is already on an
+	// hour boundary there: truncating in that zone returns the visit
+	// time unchanged. The bucket must be the UTC hour instead.
+	at := time.Date(2026, 1, 1, 23, 30, 0, 0, time.UTC)
+	if _, err := s.RecordVisit(ctx, &models.Visit{
+		Host: khost, Alias: kalias, IP: "1.2.3.4", Time: at,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hist, err := s.StatVisitHist(ctx, khost, kalias,
+		at.Add(-time.Hour), at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hist) != 1 {
+		t.Fatalf("got %d buckets, want 1", len(hist))
+	}
+	want := time.Date(2026, 1, 1, 23, 0, 0, 0, time.UTC)
+	if !hist[0].Time.UTC().Equal(want) {
+		t.Fatalf("bucket = %v, want %v", hist[0].Time.UTC(), want)
 	}
 }

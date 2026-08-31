@@ -36,7 +36,22 @@ var ErrAliasExists = errors.New("alias already existed")
 const uniqueViolation = "23505"
 
 func newPostgresStore(ctx context.Context, uri string) (*pgStore, error) {
-	pool, err := pgxpool.New(ctx, uri)
+	cfg, err := pgxpool.ParseConfig(uri)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse store uri: %w", err)
+	}
+
+	// Pin the session time zone.
+	//
+	// time is timestamptz, and date_trunc on a timestamptz truncates in
+	// the session's time zone, so the hourly buckets StatVisitHist
+	// returns would shift with a server setting nothing in this
+	// repository controls. The MongoDB pipelines truncate in UTC
+	// unconditionally, and the instance is shared with another service,
+	// so this is set here rather than assumed.
+	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to database: %w", err)
 	}
