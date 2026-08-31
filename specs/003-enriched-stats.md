@@ -1,6 +1,6 @@
 ---
 title: Enriched stats
-status: planned
+status: complete
 depends_on:
   - 002-postgres-store
 affects:
@@ -151,6 +151,57 @@ shows one alias at a time, so what a reader sees drop is the 45%.
   browser strings do not.
 - Dashboard test that the charts render from the grouped payload with no
   parser present.
+
+## Outcome
+
+Completed 2026-08-31.
+
+### Verified on production
+
+| Check | Result |
+| --- | --- |
+| Stats payload, one busy alias over a year | `ua` 85,159 bytes / 661 rows → `browser` 1,072 bytes / 34 rows, an eightyfold reduction |
+| Referrers for that alias | 379 distinct URLs → 32 hosts, no visits lost |
+| Bots excluded | shown + excluded equals all traffic, per alias, for the ten busiest |
+| Re-derivation | 348,435 visits recomputed, 3,304 reclassified, none lost; a second run changed 0 |
+| Deployed bundle | no parser, 0 occurrences of `ua-parser` |
+| Endpoints | `/s/`, a redirect and the index all serving |
+
+The `ua` figure is what the dashboard used to fetch on every load and then
+discard most of, so the reduction is per page view, not one-off.
+
+### What the reader sees drop
+
+| Alias | All traffic | Stats show | Excluded |
+| --- | --- | --- | --- |
+| blog | 31,907 | 26,839 | 5,068 |
+| resume | 25,182 | 16,360 | 8,822 |
+| email | 19,921 | 11,733 | 8,188 |
+| github | 18,644 | 13,231 | 5,413 |
+| twitter | 4,808 | 1,465 | 3,343 |
+
+The index listing still shows the left column, the stats page the middle
+one, and the `bots` mode the right one. Keeping the listing on all traffic
+was deliberate: `v0.7.0` and `v0.8.0` report those totals identically, and
+changing them here would make a rollback look like data loss.
+
+### Found while doing it
+
+**The stored derivations would have gone stale.** The columns cache a pure
+function of `ua` and `referer`, and this spec changes the bot rule, so the
+348,435 migrated rows would have been classified by the old rule and every
+new row by the new one, mixing both in one chart. That needed
+`redir -rederive`, which recomputes in place, writes only rows whose
+classification changed, and is idempotent. Any future change to the rule
+needs the same run.
+
+**The bot share was being quoted wrongly**, including by this spec. See
+the table above: the figure depends entirely on whether the index page is
+counted.
+
+**The Devices chart never showed devices.** It fed `r.os.name`, so it has
+always been an operating system breakdown under the wrong title. There are
+now separate charts from the `os` and `device` columns.
 
 ## Out of Scope
 
