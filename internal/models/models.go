@@ -12,6 +12,7 @@ import (
 // and its correlated link.
 type Redir struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
+	Host      string    `json:"-"          yaml:"host"       bson:"-"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
@@ -27,6 +28,7 @@ type Redir struct {
 // information such as PV/UV.
 type RedirIndex struct {
 	ID        string    `json:"-"          yaml:"-"          bson:"_id"`
+	Host      string    `json:"-"          yaml:"host"       bson:"-"`
 	Alias     string    `json:"alias"      yaml:"alias"      bson:"alias"`
 	URL       string    `json:"url"        yaml:"url"        bson:"url"`
 	Private   bool      `json:"private"    yaml:"private"    bson:"private"`
@@ -41,13 +43,24 @@ type RedirIndex struct {
 }
 
 // Visit indicates an record of visit pattern.
+//
+// The fields below Time are derived from UA and Referer when the visit is
+// recorded, so that a query can group by them instead of shipping every
+// distinct user agent string to the browser to be parsed there.
 type Visit struct {
 	VisitorID string    `json:"visitor_id" bson:"visitor_id"`
+	Host      string    `json:"host"       bson:"-"`
 	Alias     string    `json:"alias"      bson:"alias"`
 	IP        string    `json:"ip"         bson:"ip"`
 	UA        string    `json:"ua"         bson:"ua"`
 	Referer   string    `json:"referer"    bson:"referer"`
 	Time      time.Time `json:"time"       bson:"time"`
+
+	RefererHost string `json:"referer_host" bson:"-"`
+	Browser     string `json:"browser"      bson:"-"`
+	OS          string `json:"os"           bson:"-"`
+	Device      string `json:"device"       bson:"-"`
+	IsBot       bool   `json:"is_bot"       bson:"-"`
 }
 
 // VisitRecord represents the visit record of an alias.
