@@ -62,7 +62,7 @@ redir's services sit on the external `traefik_proxy` network
 (`docker/docker-compose.yml`) and therefore cannot resolve or reach
 `urlstatdb` at all.
 
-Two properties of the current setup are load-bearing for later steps and
+Two properties of the current setup matter for later steps and
 are easy to misread:
 
 - The `migrations/` bind mount targets `/docker-entrypoint-initdb.d`, which
