@@ -266,13 +266,13 @@ func (s *server) serveStatic(
 	)
 	switch {
 	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+loginPath):
-		s.latere.client.HandleLogin(w, r)
+		s.latere.clientFor(r).HandleLogin(w, r)
 		return nil
 	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+callbackPath):
-		s.latere.client.HandleCallback(w, r)
+		s.latere.clientFor(r).HandleCallback(w, r)
 		return nil
 	case s.latere != nil && strings.HasPrefix(r.URL.Path, prefix+logoutPath):
-		s.latere.client.HandleLogout(w, r)
+		s.latere.clientFor(r).HandleLogout(w, r)
 		return nil
 	case strings.HasPrefix(r.URL.Path, prefix+".static"):
 		// Serve static files under ./.static/*. This should not conflict

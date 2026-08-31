@@ -86,7 +86,10 @@ func testAuth(t *testing.T) *latereAuth {
 	if c == nil {
 		t.Fatal("cannot build a test oidc client")
 	}
-	return &latereAuth{client: c, allowed: principalSet("hi@changkun.de")}
+	return &latereAuth{
+		clients: map[string]*oidc.Client{config.Conf.Hostname(): c},
+		allowed: principalSet("hi@changkun.de"),
+	}
 }
 
 // TestLoginRoute checks that the login route reaches the relying party and
@@ -193,5 +196,118 @@ func TestHandleAuthUnknownModeRefuses(t *testing.T) {
 	// It must not have offered basic auth as a fallback.
 	if got := w.Header().Get("WWW-Authenticate"); got != "" {
 		t.Errorf("handleAuth fell through to basic auth: WWW-Authenticate=%q", got)
+	}
+}
+
+// TestCallbackURLsPerSite covers the fault that stopped logins working on
+// the second site.
+//
+// A relying party's callback is fixed when its client is built, and it was
+// derived once from the configured host. A login started on another site
+// therefore sent the visitor to the primary site's callback: they came
+// back on the wrong domain, and the session cookie, which carries the
+// "__Host-" prefix and so is bound to one origin, was set there instead of
+// on the site they were signing in to.
+func TestCallbackURLsPerSite(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	t.Setenv("AUTH_REDIRECT_URL", "")
+
+	config.Conf.Host = "https://changkun.de"
+	config.Conf.Hosts = map[string]config.SiteOverride{
+		"golang.design": {RepoPath: "https://github.com/golang-design"},
+	}
+
+	got := callbackURLs("/s/")
+	want := map[string]string{
+		"changkun.de":   "https://changkun.de/s/.auth/callback",
+		"golang.design": "https://golang.design/s/.auth/callback",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d callbacks, want %d: %v", len(got), len(want), got)
+	}
+	for host, url := range want {
+		if got[host] != url {
+			t.Errorf("callback for %v = %q, want %q", host, got[host], url)
+		}
+	}
+}
+
+// TestCallbackURLsHonourTheOverride keeps AUTH_REDIRECT_URL working for a
+// deployment behind a different public name. Only one value can be given
+// that way, so it applies to the primary site and the others are derived.
+func TestCallbackURLsHonourTheOverride(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	t.Setenv("AUTH_REDIRECT_URL", "https://proxy.example/s/.auth/callback")
+
+	config.Conf.Host = "https://changkun.de"
+	config.Conf.Hosts = map[string]config.SiteOverride{
+		"golang.design": {},
+	}
+
+	got := callbackURLs("/s/")
+	if got["changkun.de"] != "https://proxy.example/s/.auth/callback" {
+		t.Errorf("the override was ignored: %q", got["changkun.de"])
+	}
+	if got["golang.design"] != "https://golang.design/s/.auth/callback" {
+		t.Errorf("the second site = %q", got["golang.design"])
+	}
+}
+
+// TestCallbackURLsFollowTheScheme checks a development deployment on http
+// does not derive https callbacks for its other sites.
+func TestCallbackURLsFollowTheScheme(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	t.Setenv("AUTH_REDIRECT_URL", "")
+
+	config.Conf.Host = "http://localhost:9123"
+	config.Conf.Hosts = map[string]config.SiteOverride{"other.local": {}}
+
+	if got := callbackURLs("/s/")["other.local"]; got != "http://other.local/s/.auth/callback" {
+		t.Errorf("callback = %q, want the configured scheme", got)
+	}
+}
+
+// TestClientForSelectsTheSite checks a request is answered by its own
+// site's relying party, and that an unrecognised Host header falls back to
+// the primary one rather than to nothing.
+func TestClientForSelectsTheSite(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	config.Conf.Host = "https://changkun.de"
+	config.Conf.Hosts = map[string]config.SiteOverride{"golang.design": {}}
+
+	primary := &oidc.Client{}
+	second := &oidc.Client{}
+	a := &latereAuth{clients: map[string]*oidc.Client{
+		"changkun.de":   primary,
+		"golang.design": second,
+	}}
+
+	for _, tt := range []struct {
+		host string
+		want *oidc.Client
+	}{
+		{"changkun.de", primary},
+		{"golang.design", second},
+		{"golang.design:443", second},
+		{"evil.example", primary},
+		{"", primary},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/s/.auth/login", nil)
+		r.Host = tt.host
+		if got := a.clientFor(r); got != tt.want {
+			t.Errorf("clientFor(%q) picked the wrong site", tt.host)
+		}
+	}
+
+	// A nil relying party must not panic: the routes are only reached
+	// when latere is configured, but the method is called from handleAuth
+	// on every admin request.
+	var nilAuth *latereAuth
+	if nilAuth.clientFor(httptest.NewRequest(http.MethodGet, "/", nil)) != nil {
+		t.Error("a nil latereAuth returned a client")
 	}
 }
