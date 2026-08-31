@@ -1,6 +1,6 @@
 ---
 title: Drop MongoDB
-status: planned
+status: complete
 depends_on:
   - 002-postgres-store
 affects:
@@ -162,6 +162,32 @@ data/mongo on the host    535 MB, untouched
    the container back.
 6. Link and visit counts in PostgreSQL are unchanged across the whole
    operation, apart from live traffic.
+
+## Outcome
+
+Completed 2026-08-31.
+
+| Check | Result |
+| --- | --- |
+| Delta copied back | 25 visits, both stores then agreeing on all 184 aliases |
+| MongoDB stopped | exit 0, `data/mongo` still 535 MB, container retained |
+| redir with MongoDB down | `/s/`, a redirect, the index and `/x/` all serving; restarted cleanly to prove no coupling |
+| Port 27018 | no longer listening |
+| Memory | 195 MB returned to a 1.9 GB host |
+| Module graph | no MongoDB driver in `go.mod` or `go.sum` |
+| `internal/db` coverage | 86.2%, above the 84.1% floor |
+| `mongodb://` store URI | refused, naming `v0.7.0` |
+
+`cmd/migrate` became `internal/migrate`, with a `Source` interface in
+place of its MongoDB reader. Its ten tests run against a fake source
+holding the shapes the real data had, so they need no database to read
+from, and `004` supplies a SQLite `Source` rather than starting again.
+
+One fault was found while removing things: `usage()` interpolated the
+configured store address into the help text. That was harmless when the
+address was a MongoDB URI and prints the password now that it is a
+PostgreSQL one, so `redir -h` on the deploy host disclosed it. The text
+is redacted, with a test.
 
 ## Rollback
 

@@ -4,7 +4,7 @@ status: planned
 depends_on:
   - 002-postgres-store
 affects:
-  - cmd/migrate
+  - internal/migrate
   - internal/config
   - docker/docker-compose.yml
 effort: medium
@@ -112,6 +112,15 @@ side it is an ordinary cache hit.
 routing change, not a data change. The configuration gains a per-host
 section for the title, prefixes and the `x` import path settings, which
 differ between the two sites.
+
+## Implementation note
+
+`internal/migrate` already holds everything this needs except a reader:
+batched loading, NUL stripping, the rule that a missing timestamp is
+carried rather than replaced, per-host atomic link replacement, `Only`,
+`Truncate`, `DryRun` and the count check, with tests against a fake
+source. This spec supplies a `migrate.Source` over `redir.db` and a
+`cmd/migrate` to drive it.
 
 ## Verification
 

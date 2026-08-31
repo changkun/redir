@@ -22,7 +22,7 @@ two candidate causes and neither could be ruled out.
 | [002-postgres-store.md](002-postgres-store.md) | Complete | Replace the MongoDB store with PostgreSQL and copy the data across, with every stat unchanged and MongoDB untouched |
 | [003-enriched-stats.md](003-enriched-stats.md) | Planned | Spend the enriched columns: group user agents and referrers in SQL, exclude bots consistently, drop the client-side parser |
 | [004-unify-golang-design.md](004-unify-golang-design.md) | Planned | Fold the diverged golang.design/redir deployment into this codebase as a second host and retire its service |
-| [005-drop-mongodb.md](005-drop-mongodb.md) | Planned | Remove the MongoDB backend and stop the container, with v0.7.0 as the release to return to |
+| [005-drop-mongodb.md](005-drop-mongodb.md) | Complete | Remove the MongoDB backend and stop the container, with v0.7.0 as the release to return to |
 
 ## Status
 
@@ -36,7 +36,7 @@ two candidate causes and neither could be ruled out.
 | 002-postgres-store | ● |
 | 003-enriched-stats | ○ |
 | 004-unify-golang-design | ○ |
-| 005-drop-mongodb | ○ |
+| 005-drop-mongodb | ● |
 
 ## Dependencies
 
