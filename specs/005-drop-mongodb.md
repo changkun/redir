@@ -87,12 +87,15 @@ it: `visit_test.go` substitutes a stub to test visit recording and cookie
 handling without a database, and `004` will benefit from the seam. The
 interface stays; the dispatch behind it does not.
 
-### An attempt to use MongoDB names the way back
+### No special case for the old scheme
 
-`NewStore` rejects a `mongodb://` URI with a message naming `v0.7.0`,
-rather than a generic "unsupported scheme". Someone reading that message
-is an operator part-way through a rollback, and the message should tell
-them what to do.
+`NewStore` accepts `postgres://` and rejects everything else with one
+message naming what it wants. An earlier draft gave `mongodb://` its own
+branch naming the release to roll back to. That is a special case in the
+store constructor for a database this codebase no longer knows about, it
+would still be there years from now, and the version it names would rot.
+The rollback belongs in the release notes and in this spec, which is
+where an operator looks.
 
 ### Behaviour keeps its tests
 
@@ -157,7 +160,8 @@ data/mongo on the host    535 MB, untouched
 2. `go build ./...` has no MongoDB module in `go.sum`.
 3. `internal/db` coverage is at least 84.1%, and every test in the table
    above still exists and passes.
-4. A `mongodb://` store URI is rejected with a message naming `v0.7.0`.
+4. A store URI that is not `postgres://` is rejected, with no branch
+   naming the old backend.
 5. `data/mongo` is still 535 MB, and `docker start redirdb` alone brings
    the container back.
 6. Link and visit counts in PostgreSQL are unchanged across the whole
@@ -176,7 +180,8 @@ Completed 2026-08-31.
 | Memory | 195 MB returned to a 1.9 GB host |
 | Module graph | no MongoDB driver in `go.mod` or `go.sum` |
 | `internal/db` coverage | 86.2%, above the 84.1% floor |
-| `mongodb://` store URI | refused, naming `v0.7.0` |
+| MongoDB named in code | nowhere; the specs and the v0.7.0 notes carry the history |
+| `mongodb://` store URI | refused as an unsupported scheme, with no special case for it |
 
 `cmd/migrate` became `internal/migrate`, with a `Source` interface in
 place of its MongoDB reader. Its ten tests run against a fake source

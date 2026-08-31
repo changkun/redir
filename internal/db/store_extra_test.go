@@ -342,31 +342,6 @@ func TestNewStoreUnreachable(t *testing.T) {
 	}
 }
 
-// TestMongoURINamesTheWayBack checks the error a mongodb:// store URI
-// gets. Whoever reads it is part way through a rollback, so it must name
-// the release to return to rather than only report an unknown scheme.
-// This is the one place the old backend is still mentioned on purpose.
-func TestMongoURINamesTheWayBack(t *testing.T) {
-	ctx := context.Background()
-	for _, uri := range []string{
-		"mongodb://redirdb:27017",
-		"mongodb+srv://user:pass@cluster.example/redir",
-	} {
-		s, err := db.NewStore(ctx, uri)
-		if err == nil {
-			s.Close()
-			t.Fatalf("NewStore(%q) succeeded, want a refusal", uri)
-		}
-		if !strings.Contains(err.Error(), "v0.7.0") {
-			t.Errorf("NewStore(%q) error does not name the release to "+
-				"roll back to: %v", uri, err)
-		}
-		if strings.Contains(err.Error(), "pass") {
-			t.Errorf("error message leaked the password: %v", err)
-		}
-	}
-}
-
 // TestRedactInvalid checks that an unparseable URI yields a placeholder
 // rather than the original string, which could be a malformed URI that
 // still holds a password.
