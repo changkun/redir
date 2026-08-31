@@ -86,6 +86,84 @@ const (
 	siteHost      = "golang.design.example"
 )
 
+// TestSQLiteSinceExcludesTheBoundary is a regression test for an
+// incremental pass that duplicated a visit.
+//
+// created_at is TEXT holding a Go timestamp with nanoseconds. Filtering
+// with `created_at > ?` compared the stored string against whatever
+// layout the driver renders a time.Time in, so the row exactly at the
+// watermark came back as later than itself. On a real file that meant the
+// second pass re-imported the last row of the first.
+//
+// The rows here are inserted as raw text in the fork's own format rather
+// than through the driver, because writing and reading with the same
+// driver is what hid the fault.
+func TestSQLiteSinceExcludesTheBoundary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "raw.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`
+		CREATE TABLE collink (id integer PRIMARY KEY AUTOINCREMENT,
+		  alias text, kind int, url text, private int,
+		  created_at datetime, updated_at datetime);
+		CREATE TABLE visit (id integer PRIMARY KEY AUTOINCREMENT,
+		  alias text, kind int, ip text, ua text, referer text,
+		  created_at datetime NOT NULL);
+		INSERT INTO visit (alias, kind, ip, ua, referer, created_at) VALUES
+		  ('a', 0, '1.1.1.1', '', '', '2026-08-31 19:15:35.022133382+00:00'),
+		  ('a', 0, '2.2.2.2', '', '', '2026-08-31 19:46:03.294108302+00:00');`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	watermark, err := time.Parse(time.RFC3339Nano, "2026-08-31T19:15:35.022133382Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src, err := migrate.OpenSQLite(path, watermark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+
+	ctx := context.Background()
+	_, n, err := src.Counts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("Counts after the watermark = %d, want 1: the row at the "+
+			"watermark is not after itself", n)
+	}
+
+	var seen []string
+	if err := src.Visits(ctx, func(v migrate.Visit) error {
+		seen = append(seen, v.IP)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 1 || seen[0] != "2.2.2.2" {
+		t.Fatalf("Visits after the watermark = %v, want only the later row", seen)
+	}
+
+	// And with no watermark both rows come back, so the filter is not
+	// simply dropping everything.
+	all, err := migrate.OpenSQLite(path, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer all.Close()
+	if _, n, err := all.Counts(ctx); err != nil || n != 2 {
+		t.Fatalf("unfiltered count = %d (err %v), want 2", n, err)
+	}
+}
+
 func TestSQLiteCounts(t *testing.T) {
 	src, err := migrate.OpenSQLite(forkDB(t), time.Time{})
 	if err != nil {

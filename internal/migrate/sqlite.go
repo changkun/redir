@@ -88,11 +88,19 @@ func (s *SQLite) Links(ctx context.Context) ([]Link, error) {
 }
 
 func (s *SQLite) Visits(ctx context.Context, fn func(Visit) error) error {
+	// The filter is applied in Go, not in SQL.
+	//
+	// created_at is TEXT holding a Go timestamp such as
+	// "2026-08-31 19:15:35.022133382+00:00", and binding a time.Time
+	// makes the driver render it in its own layout, so `created_at > ?`
+	// is a string comparison between two different formats. Against real
+	// data that silently included the boundary row, which would have
+	// duplicated a visit on an incremental pass. Scanning and comparing
+	// the parsed values is exact.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT alias, ip, ua, referer, created_at
 		FROM visit
-		WHERE created_at > ?
-		ORDER BY id`, s.since)
+		ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("cannot read visit: %w", err)
 	}
@@ -114,6 +122,9 @@ func (s *SQLite) Visits(ctx context.Context, fn func(Visit) error) error {
 		v.UA = ua.String
 		v.Referer = referer.String
 		v.Time = createdAt.Time
+		if !s.after(v.Time) {
+			continue
+		}
 		// The fork had no visitor cookie, so every migrated row has no
 		// visitor id. VisitorID leaves it null.
 		if err := fn(v); err != nil {
@@ -129,13 +140,38 @@ func (s *SQLite) Counts(ctx context.Context) (links, visits int64, err error) {
 		return 0, 0, fmt.Errorf("cannot count collink: %w", err)
 	}
 	// Counted with the same filter the copy uses, so the verification
-	// compares like with like on an incremental pass.
-	if err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM visit WHERE created_at > ?`,
-		s.since).Scan(&visits); err != nil {
+	// compares like with like on an incremental pass. With no filter this
+	// is a plain count; with one it has to walk the rows, since the
+	// comparison cannot be done in SQL.
+	if s.since.IsZero() {
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM visit`).Scan(&visits); err != nil {
+			return 0, 0, fmt.Errorf("cannot count visit: %w", err)
+		}
+		return links, visits, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `SELECT created_at FROM visit`)
+	if err != nil {
 		return 0, 0, fmt.Errorf("cannot count visit: %w", err)
 	}
-	return links, visits, nil
+	defer rows.Close()
+	for rows.Next() {
+		var t sql.NullTime
+		if err := rows.Scan(&t); err != nil {
+			return 0, 0, fmt.Errorf("cannot count visit: %w", err)
+		}
+		if s.after(t.Time) {
+			visits++
+		}
+	}
+	return links, visits, rows.Err()
+}
+
+// after reports whether t is strictly later than the cutoff. An unset
+// cutoff takes everything.
+func (s *SQLite) after(t time.Time) bool {
+	return s.since.IsZero() || t.After(s.since)
 }
 
 var _ Source = (*SQLite)(nil)
