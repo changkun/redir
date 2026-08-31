@@ -169,11 +169,12 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Figure out redirect location
+	host := config.Conf.ResolveHost(r.Host)
 	red, ok := s.cache.Get(alias)
 	if !ok {
-		red, err = s.checkdb(ctx, alias)
+		red, err = s.checkdb(ctx, host, alias)
 		if err != nil {
-			red, err = s.checkvcs(ctx, alias)
+			red, err = s.checkvcs(ctx, host, alias)
 			if err != nil {
 				return
 			}
@@ -349,6 +350,8 @@ func (s *server) recognizeVisitor(
 	r *http.Request,
 	alias string,
 ) {
+	host := config.Conf.ResolveHost(r.Host)
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -363,6 +366,7 @@ func (s *server) recognizeVisitor(
 	// count visit and set cookie.
 	vid, err := s.db.RecordVisit(ctx, &models.Visit{
 		VisitorID: cookieVid,
+		Host:      host,
 		Alias:     alias,
 		IP:        utils.ReadIP(r),
 		UA:        r.UserAgent(),
@@ -377,8 +381,8 @@ func (s *server) recognizeVisitor(
 }
 
 // checkdb checks whether the given alias is exsited in the redir database
-func (s *server) checkdb(ctx context.Context, alias string) (*models.Redir, error) {
-	a, err := s.db.FetchAlias(ctx, alias)
+func (s *server) checkdb(ctx context.Context, host, alias string) (*models.Redir, error) {
+	a, err := s.db.FetchAlias(ctx, host, alias)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +391,7 @@ func (s *server) checkdb(ctx context.Context, alias string) (*models.Redir, erro
 
 // checkvcs checks whether the given alias is an repository on VCS, if so,
 // then creates a new alias and returns url of the vcs repository.
-func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, error) {
+func (s *server) checkvcs(ctx context.Context, host, alias string) (*models.Redir, error) {
 
 	// construct the try path and make the request to vcs
 	repoPath := config.Conf.X.RepoPath
@@ -410,6 +414,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, err
 
 	// store such a try path
 	r := &models.Redir{
+		Host:      host,
 		Alias:     alias,
 		URL:       tryPath,
 		Private:   false,
@@ -418,7 +423,7 @@ func (s *server) checkvcs(ctx context.Context, alias string) (*models.Redir, err
 	}
 	err = s.db.StoreAlias(ctx, r)
 	if err != nil {
-		return s.checkdb(ctx, alias)
+		return s.checkdb(ctx, host, alias)
 	}
 
 	return r, nil
@@ -530,7 +535,7 @@ func (s *server) indexData(
 		pageNum = 1
 	}
 
-	rs, total, err := s.db.FetchAliasAll(ctx, public, int64(pageSize), int64(pageNum))
+	rs, total, err := s.db.FetchAliasAll(ctx, config.Conf.ResolveHost(r.Host), public, int64(pageSize), int64(pageNum))
 	if err != nil {
 		return err
 	}
@@ -580,22 +585,23 @@ func (s *server) statData(
 
 	w.Header().Add("Content-Type", "application/json")
 
+	host := config.Conf.ResolveHost(r.Host)
 	var results any
 	switch stat {
 	case "referer":
-		results, err = s.db.StatReferer(ctx, a, start, end)
+		results, err = s.db.StatReferer(ctx, host, a, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
 	case "ua":
-		results, err = s.db.StatUA(ctx, a, start, end)
+		results, err = s.db.StatUA(ctx, host, a, start, end)
 		if err != nil {
 			retErr = err
 			return
 		}
 	case "time":
-		results, err = s.db.StatVisitHist(ctx, a, start, end)
+		results, err = s.db.StatVisitHist(ctx, host, a, start, end)
 		if err != nil {
 			retErr = err
 			return

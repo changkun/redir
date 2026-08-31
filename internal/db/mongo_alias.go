@@ -18,7 +18,7 @@ import (
 )
 
 // StoreAlias stores a given short alias with the given link if not exists
-func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
+func (db *mongoStore) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	opts := options.Update().SetUpsert(true)
@@ -42,13 +42,13 @@ func (db *Store) StoreAlias(ctx context.Context, r *models.Redir) (err error) {
 		return
 	}
 	if ret.MatchedCount > 0 {
-		err = errors.New("alias already existed")
+		err = ErrAliasExists
 	}
 	return
 }
 
 // UpdateAlias updates the link of a given alias
-func (db *Store) UpdateAlias(ctx context.Context, r *models.Redir) error {
+func (db *mongoStore) UpdateAlias(ctx context.Context, r *models.Redir) error {
 	if r.ID == "" {
 		return errors.New("missing document ID")
 	}
@@ -80,7 +80,7 @@ func (db *Store) UpdateAlias(ctx context.Context, r *models.Redir) error {
 }
 
 // DeleteAlias deletes a given short alias if exists.
-func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
+func (db *mongoStore) DeleteAlias(ctx context.Context, _, a string) (err error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	_, err = col.DeleteMany(ctx, bson.M{"alias": a})
@@ -92,7 +92,7 @@ func (db *Store) DeleteAlias(ctx context.Context, a string) (err error) {
 }
 
 // FetchAlias reads a given alias and returns the associated link.
-func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redir, error) {
+func (db *mongoStore) FetchAlias(ctx context.Context, _, a string) (*models.Redir, error) {
 	col := db.cli.Database(dbname).Collection(collink)
 
 	var r models.Redir
@@ -104,8 +104,9 @@ func (db *Store) FetchAlias(ctx context.Context, a string) (*models.Redir, error
 }
 
 // FetchAliasAll reads all aliases by given page size and page number.
-func (db *Store) FetchAliasAll(
+func (db *mongoStore) FetchAliasAll(
 	ctx context.Context,
+	_ string,
 	public bool,
 	pageSize, pageNum int64,
 ) ([]models.RedirIndex, int64, error) {

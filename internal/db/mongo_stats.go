@@ -17,9 +17,9 @@ import (
 )
 
 // StatReferer fetches and counts all referers of a given alias
-func (db *Store) StatReferer(
+func (db *mongoStore) StatReferer(
 	ctx context.Context,
-	a string,
+	_, a string,
 	start, end time.Time,
 ) ([]models.RefStat, error) {
 
@@ -92,9 +92,9 @@ func (db *Store) StatReferer(
 	return results, nil
 }
 
-func (db *Store) StatUA(
+func (db *mongoStore) StatUA(
 	ctx context.Context,
-	a string,
+	_, a string,
 	start, end time.Time,
 ) ([]models.UAStat, error) {
 
@@ -171,9 +171,9 @@ func (db *Store) StatUA(
 // It offers the ability to query PV/UV for a range of time.
 //
 // The current approach is to count IP address.
-func (db *Store) StatVisitHist(
+func (db *mongoStore) StatVisitHist(
 	ctx context.Context,
-	a string,
+	_, a string,
 	start, end time.Time,
 ) ([]models.TimeHist, error) {
 
@@ -328,7 +328,7 @@ func (db *Store) StatVisitHist(
 // StatVisit counts the PV/UV of given aliases.
 //
 // The current approach is to use visitor's IP address.
-func (db *Store) StatVisit(ctx context.Context, as []string) (rs []models.VisitRecord, err error) {
+func (db *mongoStore) StatVisit(ctx context.Context, _ string, as []string) (rs []models.VisitRecord, err error) {
 	if len(as) == 0 {
 		return nil, nil
 	}

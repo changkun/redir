@@ -8,7 +8,7 @@ affects:
   - internal/models
   - internal/short
   - cmd/migrate
-  - migrations
+  - internal/db/migrations
   - short.go
   - docker/docker-compose.yml
   - .github/workflows/redir.yml
@@ -174,7 +174,9 @@ do not survive contact with redir's data and must not be "simplified" back:
 
 ### Schema is a migration file, applied by the server
 
-The schema lives in `migrations/`, one numbered SQL file per change,
+The schema lives in `internal/db/migrations/`, one numbered SQL file per
+change, embedded next to the runner because `go:embed` reaches neither
+parent directories nor symlinks,
 starting with `001_initial.sql`. It is **not** applied by the postgres
 image's `/docker-entrypoint-initdb.d` hook. `001-shared-postgres.md`
 records why: that hook runs only when `PGDATA` is empty, and the shared

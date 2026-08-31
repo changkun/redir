@@ -14,7 +14,7 @@ import (
 
 // RecordVisit records a visit event. If the visit is a new user, it returns
 // and ID to set a cookie to the user.
-func (db *Store) RecordVisit(ctx context.Context, v *models.Visit) (string, error) {
+func (db *mongoStore) RecordVisit(ctx context.Context, v *models.Visit) (string, error) {
 	col := db.cli.Database(dbname).Collection(colvisit)
 
 	// if visitor ID does not present, then generate a new visitor ID.

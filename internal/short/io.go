@@ -70,7 +70,7 @@ func DumpFile(fname string) {
 	pageNum := int64(1)
 	pageSize := int64(100)
 	for {
-		idx, _, err := s.FetchAliasAll(ctx, false, pageSize, pageNum)
+		idx, _, err := s.FetchAliasAll(ctx, config.Conf.Hostname(), false, pageSize, pageNum)
 		if err != nil {
 			log.Printf("cannot fetch aliases, page num: %d, page siz: %d", pageNum, pageSize)
 			return

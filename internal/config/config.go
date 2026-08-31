@@ -8,7 +8,10 @@ import (
 	"bytes"
 	_ "embed"
 	"log"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -26,12 +29,16 @@ var (
 )
 
 type config struct {
-	Title       string `yaml:"title"`
-	Host        string `yaml:"host"`
-	Addr        string `yaml:"addr"`
-	Development bool   `yaml:"development"`
-	Store       string `yaml:"store"`
-	CORS        bool   `yaml:"cors"`
+	Title string `yaml:"title"`
+	Host  string `yaml:"host"`
+	// Hosts names further sites this instance serves. The store keys
+	// links by hostname, so each entry is a separate namespace of
+	// aliases. Empty means Host is the only site.
+	Hosts       []string `yaml:"hosts"`
+	Addr        string   `yaml:"addr"`
+	Development bool     `yaml:"development"`
+	Store       string   `yaml:"store"`
+	CORS        bool     `yaml:"cors"`
 	S           struct {
 		Prefix string `yaml:"prefix"`
 	} `yaml:"s"`
@@ -76,6 +83,59 @@ type config struct {
 
 //go:embed config.yml
 var defaultConf []byte
+
+// Hostname is the configured host reduced to a bare hostname, lowercased
+// and without scheme or port.
+//
+// Host in the configuration is a URL, because it is also used to build
+// absolute links. The store keys links and visits by hostname, so that one
+// process can serve several sites, and it needs the bare form.
+func (c *config) Hostname() string {
+	return NormalizeHost(c.Host)
+}
+
+// ResolveHost maps a request's Host header to the site it belongs to.
+//
+// The header is chosen by the client, and it reaches the store as part of
+// a link's identity, so it is matched against the configured sites rather
+// than trusted. checkvcs creates links for unknown aliases, so an
+// unchecked header would let anyone write rows under any hostname.
+//
+// An unrecognised header falls back to the primary site, which is what a
+// health check, a direct address, or a local development request sends.
+func (c *config) ResolveHost(h string) string {
+	n := NormalizeHost(h)
+	if n == "" {
+		return c.Hostname()
+	}
+	if n == c.Hostname() {
+		return n
+	}
+	for _, k := range c.Hosts {
+		if n == NormalizeHost(k) {
+			return n
+		}
+	}
+	return c.Hostname()
+}
+
+// NormalizeHost reduces a Host header or a configured URL to the form the
+// store keys on: lowercase, no scheme, no port, no trailing dot.
+func NormalizeHost(h string) string {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return ""
+	}
+	if u, err := url.Parse(h); err == nil && u.Host != "" {
+		h = u.Host
+	}
+	// Host headers carry a port; IPv6 literals carry brackets.
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	}
+	h = strings.Trim(h, "[]")
+	return strings.ToLower(strings.TrimSuffix(h, "."))
+}
 
 func (c *config) parse() {
 	// An unset REDIR_CONF means "run on the built-in defaults". A set one

@@ -46,7 +46,14 @@ func Cmd(ctx context.Context, operate Op, r *models.Redir) (err error) {
 // if the operation is create, then the alias is not necessary.
 // if the operation is update/fetch/delete, then the alias is used to
 // match the existing aliases, meaning that alias can be changed.
-func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redir) (err error) {
+func Edit(ctx context.Context, s db.Store, operate Op, a string, r *models.Redir) (err error) {
+	// Links are keyed by (host, alias). An admin command carries no
+	// request to read the host from, so it acts on the configured one.
+	if r.Host == "" {
+		r.Host = config.Conf.Hostname()
+	}
+	host := r.Host
+
 	switch operate {
 	case OpCreate:
 		if !Validity.MatchString(r.Alias) {
@@ -71,7 +78,7 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 		// Note that this is not atomic, meaning that we might run
 		// into concurrent inconsistent issue. But for small scale
 		// use, it is fine for now.
-		rr, err = s.FetchAlias(ctx, a)
+		rr, err = s.FetchAlias(ctx, host, a)
 		if err == nil {
 			// use old values if not presents
 			if r.URL == "" {
@@ -96,14 +103,14 @@ func Edit(ctx context.Context, s *db.Store, operate Op, a string, r *models.Redi
 		}
 		log.Printf("alias %v has been updated.\n", a)
 	case OpDelete:
-		err = s.DeleteAlias(ctx, a)
+		err = s.DeleteAlias(ctx, host, a)
 		if err != nil {
 			return
 		}
 		log.Printf("alias %v has been deleted.\n", a)
 	case OpFetch:
 		var r *models.Redir
-		r, err = s.FetchAlias(ctx, a)
+		r, err = s.FetchAlias(ctx, host, a)
 		if err != nil {
 			return
 		}

@@ -22,7 +22,7 @@ import (
 )
 
 type server struct {
-	db     *db.Store
+	db     db.Store
 	cache  *cache.LRU
 	latere *latereAuth // nil unless auth.enable is latere and it is configured
 }
@@ -78,20 +78,21 @@ func newServer(ctx context.Context) *server {
 		log.Fatalf("cannot access sub file system: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	// Opening the store applies pending migrations, which is more than a
+	// connect, so this allows more than the second a connect would need.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	db, err := db.NewStore(ctx, config.Conf.Store)
+	store, err := db.NewStore(ctx, config.Conf.Store)
 	if err != nil {
 		log.Fatalf("cannot establish connection to %s, details: \n%v",
-			config.Conf.Store, err)
+			db.Redact(config.Conf.Store), err)
 	}
-	log.Printf("connected to %s", config.Conf.Store)
 
 	var latere *latereAuth
 	if config.Conf.Auth.Enable == config.Latere {
 		latere = newLatereAuth(config.Conf.S.Prefix)
 	}
-	return &server{db: db, cache: cache.NewLRU(true), latere: latere}
+	return &server{db: store, cache: cache.NewLRU(true), latere: latere}
 }
 
 func (s *server) close() {
