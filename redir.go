@@ -17,7 +17,6 @@ import (
 
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
-	"changkun.de/x/redir/internal/migrate"
 	"changkun.de/x/redir/internal/models"
 	"changkun.de/x/redir/internal/short"
 	"changkun.de/x/redir/internal/version"
@@ -51,7 +50,7 @@ func runRederive() {
 	host := config.Conf.Hostname()
 	log.Printf("re-deriving visits for %v in %v", host,
 		db.Redact(config.Conf.Store))
-	if err := migrate.Rederive(ctx, config.Conf.Store, host); err != nil {
+	if err := db.Rederive(ctx, config.Conf.Store, host); err != nil {
 		log.Fatalf("cannot re-derive visits: %v", err)
 	}
 }
