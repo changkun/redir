@@ -42,6 +42,14 @@ auth:
 stats:
   enable: true
 gdpr:
+  # Store a keyed digest of a visitor's address instead of the address.
+  # It needs REDIR_IP_HASH_KEY in the environment: an unkeyed digest of an
+  # address can be reversed by computing every address, so it would hide
+  # nothing, and the server refuses to start rather than pretend.
+  #
+  # The key has to outlive a restart. Unique visitors are a distinct count
+  # over this value, so a key that changed would make every returning
+  # visitor look new.
   hide_ip: false
   owner:
     name: changkun.de
