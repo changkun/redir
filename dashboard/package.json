@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "antd": "^5.29.3",
+    "antd": "^6.6.2",
     "dayjs": "^1.11.23",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

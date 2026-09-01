@@ -27,7 +27,15 @@ const LinkForm = ({ record, onClose, onSaved }) => {
   }
 
   const submit = async () => {
-    const v = await form.validateFields()
+    // A form that does not validate is an ordinary outcome, not a
+    // failure: the fields already say what is wrong. Letting the
+    // rejection escape only puts it in the console.
+    let v
+    try {
+      v = await form.validateFields()
+    } catch {
+      return
+    }
     const err = await save(creating ? 'create' : 'update', record?.alias, {
       alias: v.alias,
       url: v.url,
