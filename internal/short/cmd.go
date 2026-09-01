@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"time"
 
 	"changkun.de/x/redir/internal/config"
 	"changkun.de/x/redir/internal/db"
@@ -23,8 +22,22 @@ var (
 	ErrInvalidAlias = errors.New("invalid alias pattern")
 )
 
+// Given names the fields a caller actually supplied.
+//
+// A boolean flag that was not passed is indistinguishable from one passed
+// as false, so an update had no way to tell "make this public" from "I
+// said nothing about visibility". It chose the first, which quietly made
+// private links public and untrusted links trusted whenever someone
+// changed a URL.
+type Given struct {
+	URL       bool
+	Private   bool
+	Trust     bool
+	ValidFrom bool
+}
+
 // Cmd processes the given alias and link with a specified op.
-func Cmd(ctx context.Context, operate Op, r *models.Redir) (err error) {
+func Cmd(ctx context.Context, operate Op, r *models.Redir, given Given) (err error) {
 	s, err := db.NewStore(ctx, config.Conf.Store)
 	if err != nil {
 		err = fmt.Errorf("cannot create a new alias: %w", err)
@@ -38,7 +51,7 @@ func Cmd(ctx context.Context, operate Op, r *models.Redir) (err error) {
 		}
 	}()
 
-	err = Edit(ctx, s, operate, r.Alias, r)
+	err = Edit(ctx, s, operate, r.Alias, r, given)
 	return
 }
 
@@ -46,7 +59,7 @@ func Cmd(ctx context.Context, operate Op, r *models.Redir) (err error) {
 // if the operation is create, then the alias is not necessary.
 // if the operation is update/fetch/delete, then the alias is used to
 // match the existing aliases, meaning that alias can be changed.
-func Edit(ctx context.Context, s db.Store, operate Op, a string, r *models.Redir) (err error) {
+func Edit(ctx context.Context, s db.Store, operate Op, a string, r *models.Redir, given Given) (err error) {
 	// Links are keyed by (host, alias). An admin command carries no
 	// request to read the host from, so it acts on the configured one.
 	if r.Host == "" {
@@ -80,12 +93,19 @@ func Edit(ctx context.Context, s db.Store, operate Op, a string, r *models.Redir
 		// use, it is fine for now.
 		rr, err = s.FetchAlias(ctx, host, a)
 		if err == nil {
-			// use old values if not presents
-			if r.URL == "" {
+			// Every field the caller did not supply keeps the value it
+			// has. An update that mentions only the URL must not decide
+			// anything about visibility or trust on the caller's behalf.
+			if !given.URL {
 				r.URL = rr.URL
 			}
-			tt := time.Time{}
-			if r.ValidFrom == tt {
+			if !given.Private {
+				r.Private = rr.Private
+			}
+			if !given.Trust {
+				r.Trust = rr.Trust
+			}
+			if !given.ValidFrom {
 				r.ValidFrom = rr.ValidFrom
 			}
 			r.ID = rr.ID

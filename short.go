@@ -114,8 +114,13 @@ func (s *server) sHandlerPost(w http.ResponseWriter, r *http.Request) {
 	}
 	redir.UpdatedBy = user
 
+	// The console sends the whole record, because its form is populated
+	// from the stored one and submits every field. Nothing is left for
+	// the update to preserve.
+	all := short.Given{URL: true, Private: true, Trust: true, ValidFrom: true}
+
 	// Edit redirect data.
-	err = short.Edit(r.Context(), s.db, short.Op(red.Op), red.Alias, &redir)
+	err = short.Edit(r.Context(), s.db, short.Op(red.Op), red.Alias, &redir, all)
 	if err == nil {
 		// Flush the cache so that the changes can be effected immediately.
 		s.cache.Flush()

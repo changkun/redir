@@ -37,15 +37,22 @@ func ImportFile(fname string) {
 	defer cancel()
 	for _, info := range d.Short {
 		r := &models.Redir{
-			Alias:     info.Alias,
-			URL:       info.URL,
-			Private:   info.Private,
+			Alias:   info.Alias,
+			URL:     info.URL,
+			Private: info.Private,
+			// Trust was dropped here, so importing a file quietly
+			// turned every trusted link into one that warns before
+			// redirecting.
+			Trust:     info.Trust,
 			ValidFrom: info.ValidFrom,
 		}
 
-		err = Cmd(ctx, OpUpdate, r)
+		// A file describes the whole link, so every field in it applies.
+		all := Given{URL: true, Private: true, Trust: true, ValidFrom: true}
+
+		err = Cmd(ctx, OpUpdate, r, all)
 		if err != nil {
-			err = Cmd(ctx, OpCreate, r)
+			err = Cmd(ctx, OpCreate, r, all)
 			if err != nil {
 				log.Printf("cannot import alias %v: %v\n", info.Alias, err)
 			}

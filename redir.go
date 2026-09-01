@@ -66,6 +66,25 @@ func runRederive() {
 	}
 }
 
+// givenFlags reports which of the link fields were named on the command
+// line, so an update can leave the rest alone.
+func givenFlags() short.Given {
+	var g short.Given
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "l":
+			g.URL = true
+		case "p":
+			g.Private = true
+		case "trust":
+			g.Trust = true
+		case "vt":
+			g.ValidFrom = true
+		}
+	})
+	return g
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `redir is a featured URL shortener. The redir server (run via '-s' option),
 will connect to the default database address %s.
@@ -194,19 +213,17 @@ func runCmd() {
 			}
 		}
 
-		// FIXME: This can be problematic for update.
-		//
-		// For example, if a link is set to private, but an update
-		// did's specify -p (private), then the *private will be false,
-		// then result the link to be public. This is apparently an
-		// undesired behavior.
+		// An update applies only the flags that were actually passed.
+		// A boolean flag left out is false, which used to be read as
+		// "make this public" rather than as silence, so changing a
+		// link's URL also unset its visibility and its trust.
 		err = short.Cmd(ctx, short.Op(*operate), &models.Redir{
 			Alias:     *alias,
 			URL:       *link,
 			Private:   *private,
 			Trust:     *trust,
 			ValidFrom: t.UTC(),
-		})
+		}, givenFlags())
 		if err != nil {
 			log.Println(err)
 		}
