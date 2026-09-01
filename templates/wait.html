@@ -2,121 +2,53 @@
 Use of this source code is governed by a MIT
 license that can be found in the LICENSE file. -->
 
-<!DOCTYPE html>
-<html><head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-html, body {
-    font-family: sans-serif, monospace;
-    height: 100%;
-    background-color: #333;
-    color: #aaa;
-}
-body {
-    margin: 0;
-}
-.flex-container {
-    user-select: none;
-    height: 90%;
-    padding: 0;
-    margin: 0;
-    display: -webkit-box;
-    display: -moz-box;
-    display: -ms-flexbox;
-    display: -webkit-flex;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.row {
-    width: auto;
-}
-.flex-item {
-    color: #aaa;
-    padding: 5px;
-    height: 20px;
-    margin: 10px;
-    line-height: 20px;
-    font-weight: bold;
-    font-size: 2em;
-    text-align: center;
-}
-footer {
-    user-select: none;
-    text-align: center;
-    font-size: 14px;
-    flex: 0 0 auto;
-    color: #aaa;
-    padding: 24px 50px;
-}
-a {
-    text-decoration: none;
-    color: #aaa;
-}
-a:visited {
-    color: #aaa;
-}
-a:hover {
-    color: #3c9ae8;
-}
+{{define "title"}}Not yet · redir{{end}}
+{{define "style"}}
+.wait { text-align: center; padding: 40px 0; }
+.wait .lead { color: var(--text-dim); }
 #countdown {
-    font-size: 5em;
+  font-family: var(--mono); font-size: 44px; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; margin: 18px 0 6px;
 }
-</style>
-</head><body>
-
-<div class="flex-container">
-    <div class="row">
-        <div class="flex-item">The link will be available in:</div></br></br>
-        <div id="countdown" class="flex-item"></div></br></br>
-        <div class="flex-item">at</div></br></br>
-        <div id="absolute-time" class="flex-item"></div>
-    </div>
+#absolute-time { color: var(--text-faint); font-family: var(--mono); font-size: 13px; }
+{{end}}
+{{define "content"}}
+<div class="wait">
+  <div class="lead">This link is not available yet.</div>
+  <div id="countdown">—</div>
+  <div id="absolute-time"></div>
 </div>
-<footer>
-{{ if .ShowImpressum }}
-<a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;
-{{ end }}
-{{ if .ShowPrivacy }}
-<a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;
-{{ end }}
-{{ if .ShowContact }}
-<a href="/s/.contact">Contact</a><br/><br/>
-{{ end }}
-<a href="/s">redir</a> &copy; 2021 Created by Changkun Ou.
-</footer>
+{{end}}
+{{define "script"}}
 <script>
-const calcTime = (countDownDate) => {
-    const now = new Date().getTime()
-    const distance = countDownDate - now
-    // If the count down is finished, refresh the page
-    if (distance < 0) {
-        clearInterval(x)
-        location.reload()
-        return
-    }
+// The server always sends UTC; the reader wants their own clock.
+const validFrom = new Date('{{.ValidFrom}}+00:00')
+const countdown = document.getElementById('countdown')
+const absolute = document.getElementById('absolute-time')
 
-    const days = Math.floor(distance / (1000 * 60 * 60 * 24))
-    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((distance % (1000 * 60)) / 1000)
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`
+absolute.textContent = validFrom.toLocaleString()
+
+const remaining = () => {
+  const ms = validFrom.getTime() - Date.now()
+  // The page reloads itself the moment the link becomes valid, so a
+  // visitor who waits does not have to notice and act.
+  if (ms < 0) {
+    clearInterval(tick)
+    location.reload()
+    return '0s'
+  }
+  const d = Math.floor(ms / 86400000)
+  const h = Math.floor((ms % 86400000) / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  const s = Math.floor((ms % 60000) / 1000)
+  return [d && `${d}d`, (d || h) && `${h}h`, (d || h || m) && `${m}m`, `${s}s`]
+    .filter(Boolean)
+    .join(' ')
 }
 
-// Server always fills UTC, should convert to local
-const validFrom = '{{.ValidFrom}}+00:00'
-const countDownDate = new Date(validFrom).getTime()
-
-const d = document.getElementById('absolute-time')
-d.textContent = new Date(validFrom)
-const c = document.getElementById("countdown")
-c.textContent = calcTime(countDownDate)
-
-
-const x = setInterval(function() {
-  c.textContent = calcTime(countDownDate);
-}, 1000);
+countdown.textContent = remaining()
+const tick = setInterval(() => {
+  countdown.textContent = remaining()
+}, 1000)
 </script>
-</body></html>
+{{end}}

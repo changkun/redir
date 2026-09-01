@@ -28,6 +28,8 @@ type server struct {
 }
 
 var (
+	//go:embed templates/base.html
+	basetmpl string
 	//go:embed templates/x.html
 	xtmpl string
 	//go:embed templates/wait.html
@@ -65,13 +67,23 @@ func init() {
 	// The templates are embedded constants, so parsing them depends on
 	// nothing at runtime. Doing it here rather than in newServer means a
 	// handler can be exercised without opening a database.
-	xTmpl = template.Must(template.New("xTmpl").Parse(xtmpl))
-	waitTmpl = template.Must(template.New("waitTmpl").Parse(waittmpl))
-	warnTmpl = template.Must(template.New("warnTmpl").Parse(warntmpl))
-	impressumTmpl = template.Must(template.New("impressumTmpl").Parse(impressumtmpl))
-	privacyTmpl = template.Must(template.New("privacyTmpl").Parse(privacytmpl))
-	contactTmpl = template.Must(template.New("contactTmpl").Parse(contacttmpl))
-	dTmpl = template.Must(template.New("sTmpl").Parse(dtmpl))
+	// x.html is a go-import document rather than a page: `go get` reads
+	// its meta tags and never renders it, so it carries no layout.
+	xTmpl = template.Must(template.New("x").Parse(xtmpl))
+
+	// The rest share one layout, so the design lives in a single file
+	// instead of five copies of a stylesheet that had drifted apart.
+	page := func(name, body string) *template.Template {
+		t := template.Must(template.New(name).Parse(basetmpl))
+		return template.Must(t.Parse(body))
+	}
+	waitTmpl = page("wait", waittmpl)
+	warnTmpl = page("warn", warntmpl)
+	impressumTmpl = page("impressum", impressumtmpl)
+	privacyTmpl = page("privacy", privacytmpl)
+	contactTmpl = page("contact", contacttmpl)
+
+	dTmpl = template.Must(template.New("dashboard").Parse(dtmpl))
 }
 
 func newServer(ctx context.Context) *server {

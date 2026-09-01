@@ -185,7 +185,9 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 
 	// Send a wait page if time does not permitting
 	if time.Now().UTC().Sub(red.ValidFrom.UTC()) < 0 {
-		err = waitTmpl.Execute(w, &pageInfo{
+		err = waitTmpl.ExecuteTemplate(w, "layout", &pageInfo{
+			Site:          r.Host,
+			Prefix:        config.Conf.S.Prefix,
 			ValidFrom:     red.ValidFrom.UTC().Format("2006-01-02T15:04:05"),
 			ShowImpressum: site.ShowImpressum,
 			ShowPrivacy:   site.ShowPrivacy,
@@ -212,7 +214,9 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 		// If a redirect is accidentally configured as non-trustable,
 		// but still an internal website, then we don't show the warn page.
 		if !allowRedir && !strings.Contains(red.URL, r.Host) {
-			err = warnTmpl.Execute(w, &pageInfo{
+			err = warnTmpl.ExecuteTemplate(w, "layout", &pageInfo{
+				Site:          r.Host,
+				Prefix:        config.Conf.S.Prefix,
 				OwnerName:     config.Conf.GDPR.Owner.Name,
 				OwnerDomain:   config.Conf.GDPR.Owner.Domain,
 				URL:           red.URL,
@@ -243,10 +247,14 @@ func (s *server) sHandlerGet(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageInfo struct {
-	OwnerName     string
-	OwnerDomain   string
-	URL           string
-	ValidFrom     string
+	OwnerName   string
+	OwnerDomain string
+	URL         string
+	ValidFrom   string
+	// Site and Prefix let the layout name the site and build its own
+	// links, rather than hard-coding "/s/" as five templates did.
+	Site          string
+	Prefix        string
 	Body          template.HTML
 	Email         string
 	ShowImpressum bool
@@ -333,7 +341,9 @@ func (s *server) serveStatic(
 		}
 	}
 	if t != nil {
-		return t.Execute(w, d)
+		d.Site = r.Host
+		d.Prefix = prefix
+		return t.ExecuteTemplate(w, "layout", d)
 	}
 	// A site that does not carry these pages has no such route. Saying so
 	// is better than an empty 200, which reads as a page that is merely

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -218,5 +219,76 @@ func TestLegalPagesBelongToTheirSite(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestServedPagesUseTheSharedLayout checks the server-rendered pages come
+// out of one design rather than five copies of a stylesheet.
+//
+// They used to each carry their own, which had drifted: three different
+// background colours and two different link colours across five files,
+// and a footer hard-coding "/s/" in every one.
+func TestServedPagesUseTheSharedLayout(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	config.Conf.Host = "https://changkun.de"
+	config.Conf.S.Prefix = "/s/"
+	config.Conf.GDPR.Impressum.Enable = true
+	config.Conf.GDPR.Impressum.Content = "<h1>Impressum</h1>"
+	config.Conf.GDPR.Privacy.Enable = true
+	config.Conf.GDPR.Privacy.Content = "<h1>Privacy</h1>"
+	config.Conf.GDPR.Contact.Enable = true
+	config.Conf.GDPR.Contact.Email = "hi@example.test"
+
+	s := &server{}
+	for _, page := range []string{".impressum", ".privacy", ".contact"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/s/"+page, nil)
+		r.Host = "changkun.de"
+		if err := s.serveStatic(context.Background(), w, r, "/s/"); err != nil {
+			t.Fatal(err)
+		}
+
+		body := w.Body.String()
+		for _, want := range []string{
+			"--bg: #0b0c0e", // the console's ground, not the old #333
+			"changkun.de",   // the site names itself
+			"<footer>",
+		} {
+			if !contains(body, want) {
+				t.Errorf("%v is missing %q", page, want)
+			}
+		}
+		// The prefix is configurable, so no page may assume it.
+		if contains(body, `href="/s/.impressum"`) && config.Conf.S.Prefix != "/s/" {
+			t.Errorf("%v hard-codes a prefix", page)
+		}
+	}
+}
+
+// TestWarnPageNamesItsTarget checks the interstitial says where it is
+// about to send someone, which is the entire reason it exists.
+func TestWarnPageNamesItsTarget(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	config.Conf.S.Prefix = "/s/"
+	config.Conf.GDPR.Owner.Name = "changkun.de"
+
+	var buf bytes.Buffer
+	err := warnTmpl.ExecuteTemplate(&buf, "layout", &pageInfo{
+		Site:      "changkun.de",
+		Prefix:    "/s/",
+		OwnerName: "changkun.de",
+		URL:       "https://example.com/somewhere",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := buf.String()
+	if !contains(body, "https://example.com/somewhere") {
+		t.Fatal("the warning does not name the target")
+	}
+	if !contains(body, "changkun.de") {
+		t.Error("the warning does not name the site being left")
 	}
 }

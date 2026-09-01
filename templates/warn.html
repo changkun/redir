@@ -2,140 +2,50 @@
 Use of this source code is governed by a MIT
 license that can be found in the LICENSE file. -->
 
-<!DOCTYPE html>
-<html><head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-html, body {
-    font-family: sans-serif, monospace;
-    overflow: hidden;
-    background-color: #333;
-    color: #aaa;
+{{define "title"}}Leaving {{.OwnerName}} · redir{{end}}
+{{define "style"}}
+.target {
+  display: block; font-family: var(--mono); font-size: 13px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 10px 12px; margin: 14px 0 20px;
+  word-break: break-all; color: var(--accent);
 }
-body {
-    margin: 0;
-    padding: 20px 40px 20px;
-}
-a {
-    color: #3c9ae8;
-    word-break: break-all;
-    text-decoration: none;
-}
-a:visited {
-    color: #3c9ae8;
-    text-decoration: none;
-}
-a:hover {
-    color: #15395b;
-    text-decoration: none;
-}
-
-button {
-    margin-right: 8px;
-    margin-bottom: 12px;
-    border: 1px solid transparent;
-    border-radius: 2px;
-    user-select: none;
-    touch-action: manipulation;
-    height: 32px;
-    padding: 4px 15px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all .3s cubic-bezier(.645,.045,.355,1);
-}
-.btn-primary {
-    color: #eee;
-    border-color: #1890ff;
-    background: #1890ff;
-    text-shadow: 0 -1px 0 rgb(0 0 0 / 12%);
-    box-shadow: 0 2px #0000000b;
-}
-.btn-primary a:visited {
-    color: #eee;
-    text-decoration: none;
-}
-.btn-default {
-    line-height: 1.5715;
-    position: relative;
-    display: inline-block;
-    font-weight: 400;
-}
-.btn-primary:hover {
-    color: #eee;
-    border-color: #40a9ff;
-    background: #40a9ff;
-}
-.btn-default:hover {
-    border-color: #40a9ff;
-    color: #40a9ff;
-}
-.btn-primary:active {
-    color: #aaa;
-    border-color: #096dd9;
-    background: #096dd9;
-}
-.btn-default:hover {
-    color: #096dd9;
-    border-color: #096dd9;
-}
-.btn-default:active {
-    color: #096dd9;
-}
-footer {
-    user-select: none;
-    font-size: 14px;
-    padding: 24px 0;
-    position: absolute;
-    bottom: 2%;
-}
-.small {
-    font-size: 15px;
-}
-</style>
-</head><body>
-
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.remember { color: var(--text-faint); font-size: 12px; margin-top: 18px; }
+.remember label { cursor: pointer; }
+{{end}}
+{{define "content"}}
+<h1>This link leaves {{.OwnerName}}</h1>
 <p>
-You are being redirected to an external website: <a href="{{.URL}}">{{.URL}}</a>...
+  {{.OwnerName}} does not control the page below and is not responsible for
+  its content.
 </p>
 
-<div class="buttons">
-<button class="btn-primary" onclick="location.href='{{.URL}}'">
-Allow Once
-</button>
-<button class="btn-default" onclick="allowAlways()">
-Allow Always
-</button>
+<a class="target" href="{{.URL}}" rel="noreferrer noopener">{{.URL}}</a>
+
+<div class="actions">
+  <a class="btn btn-primary" id="go" href="{{.URL}}" rel="noreferrer noopener">Continue</a>
+  <a class="btn" href="{{.Prefix}}">Back to links</a>
 </div>
 
-<p class="small">
-<sup>*</sup>Please note that <a href="{{.OwnerDomain}}">{{.OwnerName}}</a> cannot be held responsible for external websites content &amp; privacy policies.
-</p>
-
-<footer>
-{{ if .ShowImpressum }}
-<a href="/s/.impressum">Impressum</a>&nbsp;&nbsp;
-{{ end }}
-{{ if .ShowPrivacy }}
-<a href="/s/.privacy">Privacy</a>&nbsp;&nbsp;
-{{ end }}
-{{ if .ShowContact }}
-<a href="/s/.contact">Contact</a><br/><br/>
-{{ end }}
-&copy; 2021 Created by Changkun Ou.
-</footer>
+<div class="remember">
+  <label>
+    <input type="checkbox" id="remember"> Do not warn me again on this browser
+  </label>
+</div>
+{{end}}
+{{define "script"}}
 <script>
-
-/**
- * allowAlways sets a cookie so that the server will know if user wants
- * to always redirect or not.
- */
-function allowAlways() {
-    var date = new Date();
-    date.setTime(date.getTime() + (365*24*60*60*1000)); // allow 365 days.
-    document.cookie = 'redir_allow=1; expires=' + date.toUTCString();
-    document.location = '{{.URL}}'
-}
+// The choice is kept in a cookie the server reads, so it survives the
+// redirect that is about to happen. It is scoped to the site and expires,
+// rather than being remembered forever.
+document.getElementById('go').addEventListener('click', () => {
+  if (document.getElementById('remember').checked) {
+    const year = 365 * 24 * 60 * 60
+    document.cookie =
+      'redir_allow=1; path=/; max-age=' + year + '; samesite=lax' +
+      (location.protocol === 'https:' ? '; secure' : '')
+  }
+})
 </script>
-</body></html>
+{{end}}
