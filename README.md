@@ -10,7 +10,8 @@ Full-featured, self-hosted URL shortener written in Go.
 |**Access Control**| 1) Private links won't be listed in public index page; 2) Allow link to be accessible only after a configured time point; 3) Allow warn to visitors about external URL redirects (for liability control)|
 |**Public Indexes**| Router `/s` provides a list of avaliable short links |
 |**Admin Dashboard**| Dashboard `/s?mode=admin` provides full management ability |
-|**Visitor Analysis**| Statistics visualization regarding PV, UV, Referrer, Devices, Location, etc |
+|**Multiple Sites**| One process serves several domains, each with its own links and its own statistics |
+|**Visitor Analysis**| PV/UV over time, referring hosts, browsers, systems and devices, with automated traffic classified and excluded |
 |**GDPR Compliant**| Including imprint, privacy, contact pages; optional warning about external redirects, etc. |
 
 ## Documentations
@@ -22,11 +23,30 @@ Full-featured, self-hosted URL shortener written in Go.
 
 ## Web Interfaces
 
-There are three major pages available in redir.
+### Operator console
 
-| Admin Dashboard | Access Control | Public Indexes |
-|:---------------:|:--------------:|:--------------:|
-| Router: `/s?mode=admin` for management:<br/>![](./.github/assets/admin.png) | Control a link should only be available after a certain time:<br/>![](./.github/assets/wait.png) | Router `/s` provides public accessibility to see all public links:<br/>![](./.github/assets/index.png) |
+`/s?mode=admin`. Totals first, the links second, one link's detail third.
+Automated traffic is classified where a visit is recorded and left out of
+every figure, with a count saying how much was left out.
+
+![The redir operator console](./.github/assets/admin.png)
+
+### Public index
+
+`/s`. The links a visitor may follow. It carries no counts and does not
+disclose where a link goes, so the index cannot be used to enumerate
+targets.
+
+![The public index](./.github/assets/index.png)
+
+### Access control
+
+A link can be held until a time, and a link leaving the site can warn
+first.
+
+| Not yet valid | Leaving the site |
+|:---:|:---:|
+| ![A link that is not available yet](./.github/assets/wait.png) | ![The warning shown before an external redirect](./.github/assets/warn.png) |
 
 ## CLI Usage
 
@@ -80,7 +100,8 @@ configuration file:
 `latere` runs the OAuth 2.0 authorization code flow with PKCE and keeps the
 result in an encrypted session cookie. It needs an OAuth client registered
 for your deployment, whose `redirect_uris` include `<host>/s/.auth/callback`
-and whose `allowed_origins` include `<host>`. Configure it with the
+and whose `allowed_origins` include `<host>`. Every site gets its own
+callback, so a deployment serving two domains registers both. Configure it with the
 environment variables in [.env.template](./.env.template); copy that file to
 `.env` and fill it in.
 
@@ -91,6 +112,53 @@ rejects every login.
 
 The dashboard then offers Logout at `/s/.auth/logout`, which ends the
 session.
+
+## Storage
+
+redir stores its links and visits in PostgreSQL. Create a database and a
+role for it, and point `store` at them:
+
+```sql
+CREATE ROLE redir LOGIN PASSWORD '...';
+CREATE DATABASE redir OWNER redir;
+```
+
+```yaml
+store: postgres://redir:...@postgres:5432/redir?sslmode=disable
+```
+
+The schema is applied at start up from migrations embedded in the binary,
+so nothing else has to be run first. Each start applies what is missing
+and nothing more.
+
+Versions up to `v0.7.0` also read MongoDB. `v0.7.0` is the last release
+that speaks both, and is the one to use if data has to be moved out of it.
+
+## Serving several sites
+
+One process can serve several domains. The store keys links by hostname,
+so each site has its own namespace of aliases and its own statistics, and
+which site a request belongs to is decided by the `Host` header rather
+than by configuration.
+
+Only what differs needs configuring:
+
+```yaml
+host: https://changkun.de
+x:
+  repo_path: https://github.com/changkun
+hosts:
+  golang.design:
+    # /x/ import paths and the VCS probe resolve here instead.
+    repo_path: https://github.com/golang-design
+    # The impressum and privacy pages name an operator, so they do not
+    # follow onto another domain unless it is the same one.
+    legal: false
+```
+
+A `Host` header naming no configured site falls back to the primary one.
+It is client-controlled and reaches the store as part of a link's
+identity, so it is matched rather than trusted.
 
 ## Deployment
 
@@ -116,10 +184,13 @@ $ redir -s # run the server, require an external database
 Build and deploy with Docker. The image builds the dashboard and the
 server inside itself, so a deploy host needs only Docker:
 
-```
+```sh
 $ docker network create traefik_proxy
 $ make build && make up
 ```
+
+The container reads `data/redirconf.yml` from the host and needs to reach
+PostgreSQL, which for a shared instance means joining its network as well.
 
 ## Contributing
 
@@ -128,4 +199,4 @@ what you like and what you think is missing. PRs are also welcome.
 
 ## License
 
-MIT &copy; 2020-2021 [Changkun Ou](https://changkun.de)
+MIT &copy; 2020-2026 [Changkun Ou](https://changkun.de)

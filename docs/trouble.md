@@ -13,4 +13,4 @@ $ echo "export GOPRIVATE=changkun.de/x" >> ~/.zshrc
 
 ## License
 
-MIT &copy; 2020-2021 [Changkun Ou](https://changkun.de)
+MIT &copy; 2020-2026 [Changkun Ou](https://changkun.de)

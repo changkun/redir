@@ -64,6 +64,10 @@ const LinkTable = ({ isAdmin, statsMode, devMode, reloadKey, onLoaded }) => {
     )
   }, [rows, query])
 
+  // The alias is a link on the public page, because a visitor is there to
+  // follow one. In the console it is not: a row expands to its detail,
+  // and a click that sometimes navigates away and sometimes opens a panel
+  // is a click you cannot trust.
   const columns = [
     {
       title: 'Alias',
@@ -73,11 +77,21 @@ const LinkTable = ({ isAdmin, statsMode, devMode, reloadKey, onLoaded }) => {
           copyable={{ text: aliasURL(r.alias), tooltips: ['Copy link', 'Copied'] }}
           style={{ fontFamily: mono, fontSize: 13 }}
         >
-          {aliasPath(r.alias)}
+          {isAdmin ? (
+            aliasPath(r.alias)
+          ) : (
+            <a href={aliasPath(r.alias)}>{aliasPath(r.alias)}</a>
+          )}
         </Typography.Text>
       ),
     },
-    {
+  ]
+
+  if (isAdmin) {
+    // The public listing carries no target, by design: it would let the
+    // index be used to enumerate where every link goes. A column that can
+    // never hold anything is worse than no column, so it only exists here.
+    columns.push({
       title: 'Target',
       dataIndex: 'url',
       render: (url) =>
@@ -101,10 +115,7 @@ const LinkTable = ({ isAdmin, statsMode, devMode, reloadKey, onLoaded }) => {
         ) : (
           <span style={{ color: tokens.textFaint }}>—</span>
         ),
-    },
-  ]
-
-  if (isAdmin) {
+    })
     columns.push(
       {
         title: 'PV',
