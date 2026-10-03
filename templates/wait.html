@@ -4,17 +4,17 @@ license that can be found in the LICENSE file. -->
 
 {{define "title"}}Not yet · redir{{end}}
 {{define "style"}}
-.wait { text-align: center; padding: 40px 0; }
-.wait .lead { color: var(--text-dim); }
+.wait { text-align: center; padding: 26px 0 22px; }
+.wait .lead { color: var(--ink-2); }
 #countdown {
-  font-family: var(--mono); font-size: 44px; letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums; margin: 18px 0 6px;
+  font-size: 40px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.2;
+  font-variant-numeric: tabular-nums; margin: 12px 0 6px;
 }
-#absolute-time { color: var(--text-faint); font-family: var(--mono); font-size: 13px; }
+#absolute-time { color: var(--muted); font-size: 12px; }
 {{end}}
 {{define "content"}}
 <div class="wait">
-  <div class="lead">This link is not available yet.</div>
+  <div class="lead">This link is not available yet. It opens in</div>
   <div id="countdown">—</div>
   <div id="absolute-time"></div>
 </div>
@@ -26,7 +26,7 @@ const validFrom = new Date('{{.ValidFrom}}+00:00')
 const countdown = document.getElementById('countdown')
 const absolute = document.getElementById('absolute-time')
 
-absolute.textContent = validFrom.toLocaleString()
+absolute.textContent = 'on ' + validFrom.toLocaleString()
 
 const remaining = () => {
   const ms = validFrom.getTime() - Date.now()

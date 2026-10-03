@@ -5,14 +5,15 @@ license that can be found in the LICENSE file. -->
 {{define "title"}}Leaving {{.OwnerName}} · redir{{end}}
 {{define "style"}}
 .target {
-  display: block; font-family: var(--mono); font-size: 13px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: 6px; padding: 10px 12px; margin: 14px 0 20px;
-  word-break: break-all; color: var(--accent);
+  display: block; background: var(--page); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; margin: 12px 0 14px;
+  overflow-wrap: anywhere; text-decoration: none;
 }
-.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.remember { color: var(--text-faint); font-size: 12px; margin-top: 18px; }
-.remember label { cursor: pointer; }
+.target:hover { text-decoration: underline; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.remember { color: var(--ink-2); font-size: 12px; margin-top: 14px; }
+.remember label { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.remember input { margin: 0; }
 {{end}}
 {{define "content"}}
 <h1>This link leaves {{.OwnerName}}</h1>
@@ -24,8 +25,8 @@ license that can be found in the LICENSE file. -->
 <a class="target" href="{{.URL}}" rel="noreferrer noopener">{{.URL}}</a>
 
 <div class="actions">
-  <a class="btn btn-primary" id="go" href="{{.URL}}" rel="noreferrer noopener">Continue</a>
-  <a class="btn" href="{{.Prefix}}">Back to links</a>
+  <a class="btn primary" id="go" href="{{.URL}}" rel="noreferrer noopener">Continue</a>
+  <a class="btn" href="{{.Prefix}}">Back to the links</a>
 </div>
 
 <div class="remember">

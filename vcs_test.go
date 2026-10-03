@@ -251,9 +251,10 @@ func TestServedPagesUseTheSharedLayout(t *testing.T) {
 
 		body := w.Body.String()
 		for _, want := range []string{
-			"--bg: #0b0c0e", // the console's ground, not the old #333
-			"changkun.de",   // the site names itself
-			"<footer>",
+			"--page: #f9f9f7", // the shared design's ground, with a dark one beside it
+			"prefers-color-scheme: dark",
+			"changkun.de", // the site names itself
+			`class="foot"`,
 		} {
 			if !contains(body, want) {
 				t.Errorf("%v is missing %q", page, want)
