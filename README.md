@@ -20,8 +20,9 @@ readers.
   `go get yourdomain.com/x/repo` resolves to your VCS.
 - **A public index** of the links a visitor may follow, which discloses
   neither targets nor traffic.
-- **An operator console** at `/s?mode=admin`: totals, a dense listing
-  with recent traffic per link, and per-link detail.
+- **An operator console** at `/s?mode=admin`: totals, the month as a
+  chart, a dense listing with recent traffic per link, and per-link
+  detail. It follows the system's light or dark setting.
 - **Statistics** of page and unique views over time, referring hosts,
   browsers, systems and devices. Automated traffic is classified where a
   visit is recorded and excluded from every figure, with a count of what
