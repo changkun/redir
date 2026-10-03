@@ -15,17 +15,21 @@ const post = async (body) => {
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (resp.ok) {
-    return null
-  }
-  // The server answers a refusal with a message worth showing; a
-  // transport failure has none, so say which one happened.
+  // The server answers a refusal with a message worth showing, and a
+  // success with nothing. The message is read whatever the status says:
+  // a refusal has been arriving as 200, and taking that for a success
+  // told the operator a link was created when it was not.
+  let message = ''
   try {
-    const data = await resp.json()
-    return data.message || `request failed (${resp.status})`
+    message = (await resp.json()).message || ''
   } catch {
-    return `request failed (${resp.status})`
+    // No body, or not JSON: nothing was said.
   }
+  if (message) {
+    return message
+  }
+  // A transport failure has no message, so say which one happened.
+  return resp.ok ? null : `request failed (${resp.status})`
 }
 
 const get = async (devMode, params) => {
