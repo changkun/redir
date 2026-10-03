@@ -32,6 +32,7 @@ would have had two candidate causes and neither could be ruled out.
 | Spec | Status | Deliverable |
 | --- | --- | --- |
 | [006-operator-console.md](006-operator-console.md) | Complete | Rebuild the dashboard as a console: totals first, a dense listing second, one link's detail third |
+| [007-shared-design.md](007-shared-design.md) | Complete | Put the console and the server's pages in the design the urlstat dashboard uses, in light and dark |
 
 ## Status
 
