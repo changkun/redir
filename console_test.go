@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,4 +149,45 @@ func indexOfNonZero(xs []int64) int {
 		}
 	}
 	return -1
+}
+
+// TestRefusedChangeIsAnswered400 checks that a change the server refuses
+// says so in its status as well as in its message. The status used to be
+// set after the body was written, so a refusal arrived as 200 and a client
+// that trusted the status took it for a success.
+func TestRefusedChangeIsAnswered400(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	config.Conf.Auth.Enable = config.None
+	s := &server{db: &listingStore{}}
+
+	for name, body := range map[string]string{
+		"an unknown operator": `{"op":"no-such-op","alias":"x","data":{}}`,
+		"not json":            `{`,
+	} {
+		w := httptest.NewRecorder()
+		s.sHandlerPost(w, httptest.NewRequest(http.MethodPost, "/s/", strings.NewReader(body)))
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want %d", name, w.Code, http.StatusBadRequest)
+		}
+		var out shortOutput
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.Message == "" {
+			t.Errorf("%s: body = %q, want a message", name, w.Body)
+		}
+	}
+}
+
+// TestUnauthorizedChangeKeepsItsOwnAnswer checks that a change from someone
+// not signed in is answered by the login redirect, not turned into a 400.
+func TestUnauthorizedChangeKeepsItsOwnAnswer(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved })
+	config.Conf.Auth.Enable = "no-such-mode"
+	s := &server{db: &listingStore{}}
+
+	w := httptest.NewRecorder()
+	s.sHandlerPost(w, httptest.NewRequest(http.MethodPost, "/s/", strings.NewReader(`{"op":"create","alias":"x","data":{}}`)))
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want the %d handleAuth sets", w.Code, http.StatusForbidden)
+	}
 }

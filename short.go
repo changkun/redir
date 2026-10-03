@@ -71,13 +71,21 @@ type shortOutput struct {
 func (s *server) sHandlerPost(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {
-		if err != nil {
-			b, _ := json.Marshal(shortOutput{
-				Message: err.Error(),
-			})
-			_, _ = w.Write(b)
+		if err == nil {
+			return
+		}
+		b, _ := json.Marshal(shortOutput{
+			Message: err.Error(),
+		})
+		// A refused change is the caller's mistake and is answered 400.
+		// The status has to be sent before the body: it used to follow
+		// it, where it has no effect, so every refusal arrived as 200.
+		// An unauthorized request has already been answered by
+		// handleAuth, with a redirect to the login or a status of its own.
+		if !errors.Is(err, errUnauthorized) {
 			w.WriteHeader(http.StatusBadRequest)
 		}
+		_, _ = w.Write(b)
 	}()
 
 	// All post request must be authenticated.

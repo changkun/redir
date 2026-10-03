@@ -92,6 +92,9 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) (user string
 			if time.Now().UTC().Sub(last.Add(bloc)) < 0 {
 				log.Printf("block ip %v, too much failure attempts. Block time: %v, release until: %v\n",
 					ip, bloc, last.Add(bloc))
+				// Every other refusal here sets a status; without one
+				// this would be answered 200.
+				w.WriteHeader(http.StatusTooManyRequests)
 				err = fmt.Errorf("%w: too much failure attempts", errUnauthorized)
 				return
 			}
