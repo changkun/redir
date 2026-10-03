@@ -8,11 +8,11 @@ import Overview from './Overview'
 import LinkTable from './LinkTable'
 import LinkForm from './LinkForm'
 import { fetchOverview } from '../lib/api'
-import { day } from '../lib/time'
+import { defaultRange } from '../lib/time'
 
-// overviewDays is how far back the totals and the chart reach. Thirty
-// days is long enough for a weekly rhythm to be visible without
-// flattening what happened this week.
+// overviewDays is how far back the totals and the chart reach, which is
+// what defaultRange covers. Thirty days is long enough for a weekly rhythm
+// to be visible without flattening what happened this week.
 const overviewDays = 30
 
 const Home = (props) => {
@@ -29,10 +29,11 @@ const Home = (props) => {
 
   const loadOverview = useCallback(async () => {
     if (!props.isAdmin) return
-    const end = new Date()
-    const start = new Date(end.getTime() - overviewDays * 864e5)
+    // The range ends tomorrow, as a link's own does: the server reads the
+    // end as that day's midnight, so ending today left today out.
+    const [start, end] = defaultRange()
     try {
-      setOverview(await fetchOverview(props.devMode, day(start), day(end)))
+      setOverview(await fetchOverview(props.devMode, start, end))
     } catch (e) {
       notify(`Could not load the totals: ${e.message ?? e}`, true)
     }
