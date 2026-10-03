@@ -2,62 +2,188 @@
 Use of this source code is governed by a MIT
 license that can be found in the LICENSE file. */
 
+/* The console shares its design with the urlstat dashboard, so the two
+   read as one set of tools: the same colors, type, cards, tables and
+   controls, in the same words. See specs/007-shared-design.md.
+
+   Colors are named by the job they do. The two chart colors were checked
+   against both surfaces for lightness, chroma, colorblind separation and
+   contrast. theme.js carries the same values for the antd components. */
 :root {
-  --bg: #0b0c0e;
-  --surface: #121316;
-  --surface-hover: #17181c;
-  --line: #232529;
-  --line-strong: #2e3137;
-  --text: #e6e7e9;
-  --text-dim: #9aa0a6;
-  --text-faint: #6b7176;
-  --accent: #4c8dff;
-  --good: #3fb950;
-  --warn: #d29922;
-  --bad: #f85149;
-  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
-    'Liberation Mono', monospace;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11, 11, 11, 0.1); --wash: rgba(11, 11, 11, 0.045);
+  --pv: #2a78d6; --uv: #eb6834; --down: #b3261e; --danger: #b3261e;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.1); --wash: rgba(255, 255, 255, 0.06);
+    --pv: #3987e5; --uv: #d95926; --down: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+button, select, input { font: inherit; color: inherit; }
+main { max-width: 1160px; margin: 0 auto; padding: 14px 16px 28px; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--pv); outline-offset: 1px; }
 
-html,
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+.top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.top h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.top h1 a { text-decoration: none; }
+.top p { margin: 0; color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top .who { margin-left: auto; display: flex; align-items: baseline; gap: 12px; color: var(--ink-2); white-space: nowrap; }
+.top .who a { color: var(--ink-2); text-decoration: none; }
+.top .who a:hover { color: var(--ink); text-decoration: underline; }
+.top .who a.link { text-decoration: underline; text-underline-offset: 2px; }
 
-/* Figures are read down a column, so their digits have to line up. */
-.num {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-  text-align: right;
-  white-space: nowrap;
-}
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.busy { opacity: 0.5; transition: opacity 0.15s; }
 
-.mono {
-  font-family: var(--mono);
-}
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+.tile { padding: 10px 14px 11px; min-width: 0; }
+.tile .label { color: var(--ink-2); }
+.tile .value { font-size: 24px; font-weight: 650; line-height: 1.2; letter-spacing: -0.01em; margin-top: 1px; }
+.tile .note { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-code {
-  font-family: var(--mono);
-}
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 9px 14px 0; min-height: 34px; }
+.head h2, .head h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.head .count { color: var(--ink-2); }
+.head .right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.legend { display: flex; gap: 12px; color: var(--ink-2); white-space: nowrap; }
+.legend i { display: inline-block; width: 14px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 5px; }
+.link { border: 0; background: none; padding: 2px 0; cursor: pointer; white-space: nowrap; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.link:hover { color: var(--ink); }
+.link.danger:hover { color: var(--down); }
+.hint { color: var(--muted); font-size: 12px; }
+.status { color: var(--ink-2); }
+.status.error { color: var(--down); }
 
-/* One focus treatment everywhere, visible against the dark ground. */
-:where(a, button, [tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
+.btn { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn:hover:not(:disabled) { background: var(--wash); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+/* The one action a view is there for wears the ink, as a pressed control does. */
+.btn.primary, .btn[aria-pressed="true"] { background: var(--ink); border-color: transparent; color: var(--surface); }
+.btn.primary:hover:not(:disabled) { background: var(--ink); opacity: 0.86; }
+.btn.danger { background: var(--danger); border-color: transparent; color: #fff; }
+.btn.danger:hover:not(:disabled) { background: var(--danger); filter: brightness(1.12); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { height: 26px; padding: 0 10px; border: 0; background: none; cursor: pointer; color: var(--ink-2); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button:hover { background: var(--wash); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.search { height: 26px; width: 190px; max-width: 46vw; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--page); }
+.tag { display: inline-block; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--ink-2); font-size: 11px; line-height: 16px; }
 
-a {
-  color: var(--text);
-  text-decoration: none;
+/* The chart. A drag is not used here, so the cursor only reads. */
+.chart { margin-bottom: 10px; }
+.plot { position: relative; padding: 4px 8px 6px; }
+.plot svg { display: block; width: 100%; overflow: visible; cursor: crosshair; }
+/* The reading hairline shows where the focus is, so no ring around the chart. */
+.plot svg:focus { outline: none; }
+.plot text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.tip { position: absolute; top: 8px; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); white-space: nowrap; z-index: 1; }
+.tip .day { color: var(--ink-2); margin-bottom: 2px; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.tip .row i { width: 12px; height: 2px; border-radius: 1px; }
+.tip .row b { font-weight: 650; min-width: 4ch; font-variant-numeric: tabular-nums; }
+.tip .row span { color: var(--ink-2); }
+.empty { padding: 28px 14px; text-align: center; color: var(--ink-2); }
+.scroll { max-height: 232px; overflow: auto; margin-top: 4px; }
+
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th, td { padding: 5px 0 5px 14px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+th:last-child, td:last-child { padding-right: 14px; }
+th { font-weight: 500; color: var(--ink-2); font-size: 12px; border-bottom: 1px solid var(--grid); }
+tbody tr + tr td { border-top: 1px solid var(--grid); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; width: 84px; }
+th button { border: 0; background: none; padding: 0; cursor: pointer; color: inherit; font-weight: inherit; }
+th button:hover { color: var(--ink); }
+th[aria-sort] button { color: var(--ink); font-weight: 650; }
+td a { text-decoration: none; }
+td a:hover { text-decoration: underline; }
+td .sub { color: var(--muted); }
+.more { display: flex; align-items: center; gap: 10px; padding: 8px 14px 10px; border-top: 1px solid var(--grid); color: var(--ink-2); }
+
+/* The links. A row opens to that link's detail, so the whole row is the
+   handle and the arrow at its start says so. */
+.links tr.row:hover td { background: var(--wash); }
+.links tr.opens { cursor: pointer; }
+.links td.open, .links th.open { width: 30px; padding-left: 10px; overflow: visible; }
+.links .twist { border: 0; background: none; padding: 0 4px; cursor: pointer; color: var(--muted); font-size: 10px; line-height: 18px; }
+.links tr.row:hover .twist, .links tr[aria-expanded="true"] .twist { color: var(--ink); }
+.links td.alias { width: 24%; }
+.links td.alias .name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.links td.alias .name > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.links .copy { flex: none; opacity: 0; }
+.links tr.row:hover .copy, .links .copy:focus-visible, .links .copy.done { opacity: 1; }
+/* Without a pointer there is no hover to reveal it. */
+@media (hover: none) { .links .copy { opacity: 1; } }
+.links td.target { color: var(--ink-2); }
+.links td.spark, .links th.spark { width: 104px; }
+.links td.flags, .links th.flags { width: 150px; }
+.links td.flags .tag + .tag { margin-left: 4px; }
+.links td.acts, .links th.acts { width: 108px; text-align: right; }
+.links td.acts .link + .link { margin-left: 10px; }
+.links tr.detail > td { padding: 0; white-space: normal; background: var(--page); }
+.sparkline { display: block; }
+
+/* The public index: the links, side by side. */
+.grid { list-style: none; margin: 0; padding: 6px 8px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0 8px; }
+.grid li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 6px; border-radius: 6px; }
+.grid li:hover { background: var(--wash); }
+.grid a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; text-decoration: none; }
+.grid a:hover { text-decoration: underline; }
+.grid .copy { flex: none; opacity: 0; }
+.grid li:hover .copy, .grid .copy:focus-visible, .grid .copy.done { opacity: 1; }
+@media (hover: none) { .grid .copy { opacity: 1; } }
+
+/* One link's detail: its chart, and who came, in four short lists. */
+.detail-in { padding: 4px 6px 12px; }
+.detail-in .note { color: var(--ink-2); }
+.lists { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 18px; padding: 4px 14px 0; }
+.lists h3 { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+.lists .line { display: grid; grid-template-columns: minmax(0, 1fr) 56px 44px; align-items: center; gap: 8px; padding: 3px 0; border-top: 1px solid var(--grid); }
+.lists .line:first-of-type { border-top: 0; }
+.lists .line > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lists .line .bar { display: block; }
+.lists .line i { display: block; height: 6px; min-width: 2px; border-radius: 0 3px 3px 0; background: var(--pv); }
+.lists .line b { font-weight: 400; text-align: right; font-variant-numeric: tabular-nums; }
+
+.foot { margin-top: 12px; color: var(--ink-2); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.foot a { color: var(--ink-2); }
+.foot a:hover { color: var(--ink); }
+
+/* The dialogs are antd's, for their form validation and date entry, and
+   wear the same surface, type and buttons as everything else. */
+.ant-modal .ant-modal-container, .ant-modal .ant-modal-content { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); }
+.ant-modal .ant-modal-title { font-size: 15px; font-weight: 650; }
+.ant-modal .ant-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.ant-modal .ant-modal-footer .btn { margin: 0; }
+.ant-form-vertical .ant-form-item { margin-bottom: 12px; }
+.ant-form-vertical .ant-form-item .ant-form-item-label { padding-bottom: 3px; }
+.ant-form-vertical .ant-form-item .ant-form-item-label > label { font-weight: 600; height: auto; }
+.ant-form-item .ant-form-item-extra, .ant-form-item .ant-form-item-explain { font-size: 12px; }
+.confirm p { margin: 0; color: var(--ink-2); }
+.confirm .what { margin: 10px 0 0; padding: 6px 0; border-top: 1px solid var(--grid); border-bottom: 1px solid var(--grid); display: flex; justify-content: space-between; gap: 12px; }
+.confirm .what span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confirm .what span:last-child { color: var(--ink-2); flex: none; max-width: 60%; }
+
+@media (max-width: 820px) {
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .tile .note { white-space: normal; }
+  .lists { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+  /* LinkTable leaves the other columns out at this width. */
+  .links td.alias { width: auto; }
+  .links td.num, .links th.num { width: 66px; }
+  .links td.acts, .links th.acts { width: 112px; }
+  .links .copy { display: none; }
+  .head .right { margin-left: 0; width: 100%; }
+  .search { flex: 1; max-width: none; }
 }
-a:hover {
-  color: var(--accent);
+@media (max-width: 480px) {
+  .lists { grid-template-columns: minmax(0, 1fr); }
+  .top .who .wide { display: none; }
 }

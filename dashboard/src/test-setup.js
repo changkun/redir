@@ -2,8 +2,9 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-// jsdom implements neither of these, and antd's responsive components
-// read both on mount.
+// jsdom implements neither of these. The console reads the first for the
+// system's light or dark setting and for a phone's width, the chart
+// measures itself with the second, and antd reads both on mount.
 window.matchMedia =
   window.matchMedia ||
   ((query) => ({

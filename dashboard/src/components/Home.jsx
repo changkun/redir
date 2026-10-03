@@ -3,25 +3,29 @@
 // license that can be found in the LICENSE file.
 
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button } from 'antd'
 import Shell from './Shell'
 import Overview from './Overview'
 import LinkTable from './LinkTable'
 import LinkForm from './LinkForm'
 import { fetchOverview } from '../lib/api'
 import { day } from '../lib/time'
-import { tokens } from '../theme'
 
-// overviewDays is how far back the strip at the top reaches. Thirty days
-// is long enough for a weekly rhythm to be visible without flattening
-// what happened this week.
+// overviewDays is how far back the totals and the chart reach. Thirty
+// days is long enough for a weekly rhythm to be visible without
+// flattening what happened this week.
 const overviewDays = 30
 
 const Home = (props) => {
-  const { message } = App.useApp()
   const [overview, setOverview] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [creating, setCreating] = useState(false)
+  // What the last action did, said once beside the list it changed. An
+  // error stays until the next action; the rest is not worth a dialog.
+  const [status, setStatus] = useState({ text: '', error: false })
+  const notify = useCallback(
+    (text, error = false) => setStatus({ text, error }),
+    [],
+  )
 
   const loadOverview = useCallback(async () => {
     if (!props.isAdmin) return
@@ -30,9 +34,9 @@ const Home = (props) => {
     try {
       setOverview(await fetchOverview(props.devMode, day(start), day(end)))
     } catch (e) {
-      message.error(String(e))
+      notify(`Could not load the totals: ${e.message ?? e}`, true)
     }
-  }, [props.isAdmin, props.devMode, message])
+  }, [props.isAdmin, props.devMode, notify])
 
   useEffect(() => {
     loadOverview()
@@ -45,9 +49,7 @@ const Home = (props) => {
       {props.showImpressum && <a href="./.impressum">Impressum</a>}
       {props.showPrivacy && <a href="./.privacy">Privacy</a>}
       {props.showContact && <a href="./.contact">Contact</a>}
-      <span style={{ color: tokens.textFaint }}>
-        redir · {props.site}
-      </span>
+      <span>redir on {props.site}</span>
     </>
   )
 
@@ -57,30 +59,9 @@ const Home = (props) => {
       isAdmin={props.isAdmin}
       logoutURL={props.logoutURL}
       footer={footer}
-      actions={
-        props.isAdmin && (
-          <Button size="small" type="primary" onClick={() => setCreating(true)}>
-            New link
-          </Button>
-        )
-      }
     >
-      {props.isAdmin ? (
-        <Overview data={overview} days={overviewDays} />
-      ) : (
-        <div
-          style={{
-            padding: `${tokens.space(8)}px 0 ${tokens.space(4)}px`,
-            borderBottom: `1px solid ${tokens.line}`,
-          }}
-        >
-          <div style={{ fontSize: 20, letterSpacing: '-0.01em' }}>
-            Short links
-          </div>
-          <div style={{ color: tokens.textDim, marginTop: 4 }}>
-            Public redirects served by {props.site}.
-          </div>
-        </div>
+      {props.isAdmin && (
+        <Overview data={overview} days={overviewDays} site={props.site} />
       )}
 
       <LinkTable
@@ -88,14 +69,19 @@ const Home = (props) => {
         statsMode={props.statsMode}
         devMode={props.devMode}
         reloadKey={reloadKey}
+        status={status}
+        notify={notify}
+        onNew={() => setCreating(true)}
+        onChanged={refresh}
       />
 
       {creating && (
         <LinkForm
           record={null}
           onClose={() => setCreating(false)}
-          onSaved={() => {
+          onSaved={(alias) => {
             setCreating(false)
+            notify(`${alias} created.`)
             refresh()
           }}
         />

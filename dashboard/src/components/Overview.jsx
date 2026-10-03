@@ -2,8 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
-import { tokens } from '../theme'
-import Spark from './Spark'
+import Trend from './Trend'
 
 const fmt = (n) => (n ?? 0).toLocaleString()
 
@@ -11,70 +10,59 @@ const fmt = (n) => (n ?? 0).toLocaleString()
 const pct = (part, whole) =>
   whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : '—'
 
-const Figure = ({ value, label, hint, tone }) => (
-  <div style={{ minWidth: 0 }}>
-    <div
-      className="num"
-      style={{
-        fontSize: 22,
-        lineHeight: '28px',
-        textAlign: 'left',
-        color: tone ?? tokens.text,
-        letterSpacing: '-0.01em',
-      }}
-    >
-      {value}
-    </div>
-    <div style={{ color: tokens.textDim, fontSize: 12 }}>
-      {label}
-      {hint && (
-        <span style={{ color: tokens.textFaint }}> · {hint}</span>
-      )}
-    </div>
+const Tile = ({ label, value, note }) => (
+  <div className="card tile">
+    <div className="label">{label}</div>
+    <div className="value">{value}</div>
+    <div className="note">{note}</div>
   </div>
 )
 
 // Overview is the console's first answer: whether anything is happening.
 //
-// Four figures and a shape. The figures are the ones an operator acts on,
-// and automated traffic is among them because it is the majority here and
-// leaving it out would make the others look wrong.
-const Overview = ({ data, days }) => {
+// Four figures and the shape of the month. The figures are the ones an
+// operator acts on, and automated traffic is among them because it is a
+// large share here and leaving it out would make the others look wrong.
+const Overview = ({ data, days, site }) => {
   const o = data ?? {}
-  const series = (o.series ?? []).map((d) => d.pv)
+  const series = o.series ?? []
+  const ready = data !== null && data !== undefined
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-end',
-        gap: tokens.space(10),
-        padding: `${tokens.space(4)}px 0 ${tokens.space(4)}px`,
-        borderBottom: `1px solid ${tokens.line}`,
-        flexWrap: 'wrap',
-      }}
-    >
-      <Figure value={fmt(o.links)} label="links" />
-      <Figure value={fmt(o.visits)} label="visits" hint={`${days} days`} />
-      <Figure value={fmt(o.people)} label="people" />
-      <Figure
-        value={pct(o.bots, o.visits)}
-        label="automated"
-        hint={fmt(o.bots)}
-        tone={tokens.textDim}
-      />
-      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-        <Spark
-          data={series}
-          width={220}
-          height={34}
-          title={`traffic over the last ${days} days`}
+    <>
+      <section className="tiles" aria-label="Totals">
+        <Tile
+          label="Links"
+          value={ready ? fmt(o.links) : '–'}
+          note={`on ${site}`}
         />
-        <div style={{ color: tokens.textFaint, fontSize: 11, marginTop: 2 }}>
-          people per day
-        </div>
-      </div>
-    </div>
+        <Tile
+          label="Visits"
+          value={ready ? fmt(o.visits) : '–'}
+          note={`in the last ${days} days, bots included`}
+        />
+        <Tile
+          label="By people"
+          value={ready ? fmt(o.people) : '–'}
+          note="the visits every other figure counts"
+        />
+        <Tile
+          label="Automated"
+          value={ready ? pct(o.bots, o.visits) : '–'}
+          note={ready ? `${fmt(o.bots)} visits by bots, left out below` : ' '}
+        />
+      </section>
+
+      <figure className="card chart" style={{ margin: '0 0 10px' }}>
+        <Trend
+          title="Daily visits by people"
+          labels={series.map((d) => d.day)}
+          pv={series.map((d) => d.pv)}
+          uv={series.map((d) => d.uv)}
+          loading={!ready}
+        />
+      </figure>
+    </>
   )
 }
 
