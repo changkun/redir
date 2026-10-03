@@ -77,8 +77,12 @@ const LinkTable = ({
   // columns there are.
   const wide = !useNarrow()
 
-  const pageSize = 20
+  // Every link at once, so that the list can be read and filtered as a
+  // whole. A pager appears only past this many, which no index here is
+  // near.
+  const pageSize = 500
   const pages = Math.max(1, Math.ceil(total / pageSize))
+  const paged = pages > 1
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,9 +103,9 @@ const LinkTable = ({
     load()
   }, [load, reloadKey])
 
-  // The filter is client side and deliberately so: it narrows the page in
-  // front of you as you type, with no round trip. Finding a link that is
-  // not on this page is what the pager is for.
+  // The filter is client side and deliberately so: it narrows the list in
+  // front of you as you type, with no round trip. The public index is in
+  // alphabetical order, which is how a list of names is looked through.
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     const shown = q
@@ -111,8 +115,13 @@ const LinkTable = ({
             (r.url ?? '').toLowerCase().includes(q),
         )
       : rows
+    if (!isAdmin) {
+      return [...shown].sort((a, b) =>
+        a.alias.localeCompare(b.alias, undefined, { sensitivity: 'base' }),
+      )
+    }
     return sortRows(shown, sort)
-  }, [rows, query, sort])
+  }, [rows, query, sort, isAdmin])
 
   // A row opens to its detail where there are statistics to show.
   const opens = isAdmin && statsMode
@@ -152,7 +161,7 @@ const LinkTable = ({
         <h2>Links</h2>
         <span className="count">
           {query
-            ? `${visible.length} of ${rows.length} on this page`
+            ? `${visible.length} of ${rows.length}${paged ? ' on this page' : ''}`
             : fmt(total)}
         </span>
         <div className="right">
@@ -170,8 +179,8 @@ const LinkTable = ({
           <input
             className="search"
             type="search"
-            placeholder="Filter this page"
-            aria-label="Filter this page"
+            placeholder={paged ? 'Filter this page' : 'Filter links'}
+            aria-label={paged ? 'Filter this page' : 'Filter links'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -184,7 +193,9 @@ const LinkTable = ({
             {!loaded
               ? 'Loading…'
               : query
-                ? 'No link on this page matches.'
+                ? paged
+                  ? 'No link on this page matches.'
+                  : 'No link matches.'
                 : 'No links yet.'}
           </div>
         ) : !isAdmin ? (
@@ -350,7 +361,7 @@ const LinkTable = ({
         )}
       </div>
 
-      {pages > 1 && (
+      {paged && (
         <div className="more">
           <button
             type="button"

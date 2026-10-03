@@ -131,7 +131,7 @@ td .sub { color: var(--muted); }
 .sparkline { display: block; }
 
 /* The public index: the links, side by side. */
-.grid { list-style: none; margin: 0; padding: 6px 8px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0 8px; }
+.grid { list-style: none; margin: 0; padding: 6px 8px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 0 8px; }
 .grid li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 6px; border-radius: 6px; }
 .grid li:hover { background: var(--wash); }
 .grid a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; text-decoration: none; }
