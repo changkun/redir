@@ -17,7 +17,8 @@ readers.
 - **Short links** under `/s/`, with semantic aliases rather than
   generated ones: `/s/blog`, `/s/talks/2026`.
 - **Go vanity imports** under `/x/`, serving the `go-import` meta tag so
-  `go get yourdomain.com/x/repo` resolves to your VCS.
+  `go get yourdomain.com/x/repo` resolves to your VCS, and at import
+  paths a site lists one by one, such as a module at the domain itself.
 - **A public index** of the links a visitor may follow, which discloses
   neither targets nor traffic.
 - **An operator console** at `/s?mode=admin`: totals, the month as a
@@ -129,6 +130,28 @@ hosts:
 A `Host` header naming no configured site falls back to the primary one.
 It is chosen by the client and becomes part of a link's identity, so it
 is matched against the configured sites rather than trusted.
+
+A site offers short links under `s.prefix` and repositories under
+`x.prefix` unless it turns them off, and it can serve import paths of its
+own, each from its own repository. A domain that is one module path and
+nothing else:
+
+```yaml
+hosts:
+  poly.red:
+    links: false
+    repos: false
+    imports:
+      # The import path and every package below it.
+      poly.red:
+        repo: https://github.com/changkun/polyred
+        # Where a browser goes. Unset, it is the package on godoc_host.
+        web: https://github.com/changkun/polyred
+```
+
+A site's import paths come before its other services, so every path below
+one answers for the module. A site without short links gets no login and
+no aliases.
 
 ## Command line
 

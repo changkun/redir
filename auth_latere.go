@@ -95,7 +95,8 @@ func callbackURLs(prefix string) map[string]string {
 	}
 	for name := range config.Conf.Hosts {
 		host := config.NormalizeHost(name)
-		if host == "" || host == primary {
+		// A site without short links has no console to sign in to.
+		if host == "" || host == primary || !config.Conf.SiteFor(host).Links {
 			continue
 		}
 		out[host] = scheme + "://" + host + prefix + callbackPath

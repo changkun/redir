@@ -7,6 +7,7 @@ package config
 import (
 	"cmp"
 	_ "embed"
+	"fmt"
 	"log"
 	"net"
 	"net/url"
@@ -31,9 +32,9 @@ type config struct {
 	// hostname. The store keys links by hostname, so each entry is a
 	// separate namespace of aliases. Empty means Host is the only site.
 	//
-	// An entry carries only what differs from the settings above. In
-	// practice that is the VCS organisation and whether the legal pages
-	// apply; everything else is shared.
+	// An entry carries only what differs from the settings above: the VCS
+	// organisation, whether the legal pages apply, which of the services
+	// the site offers, and the import paths it serves.
 	Hosts       map[string]SiteOverride `yaml:"hosts"`
 	Addr        string                  `yaml:"addr"`
 	Development bool                    `yaml:"development"`
@@ -97,6 +98,28 @@ type SiteOverride struct {
 	// apply to this site. They name an operator, so they do not follow a
 	// process onto another domain by default.
 	Legal bool `yaml:"legal"`
+	// Links and Repos, set to false, turn off a service the site does not
+	// offer: its short links under s.prefix, or its repositories under
+	// x.prefix. Unset, a site offers both, as the primary one does. That
+	// golang.design does too is its choice, not a rule: a site may be a
+	// module path and nothing else.
+	Links *bool `yaml:"links"`
+	Repos *bool `yaml:"repos"`
+	// Imports are Go import paths of the site, each served from a
+	// repository of its own rather than from the tree under x.prefix,
+	// such as poly.red from github.com/changkun/polyred. They are keyed
+	// by import path, which starts with the site's hostname.
+	Imports map[string]Import `yaml:"imports"`
+}
+
+// Import is a Go import path served from one repository: the path itself
+// and every package below it.
+type Import struct {
+	// Repo is the repository that holds the code.
+	Repo string `yaml:"repo"`
+	// Web is where a browser asking for the import path is sent. Unset,
+	// it is the package's documentation on x.godoc_host, as for x.prefix.
+	Web string `yaml:"web"`
 }
 
 // Site is the configuration that applies to one request, resolved from
@@ -115,6 +138,29 @@ type Site struct {
 	ShowImpressum bool
 	ShowPrivacy   bool
 	ShowContact   bool
+	// Links and Repos report whether the site offers short links under
+	// s.prefix and repositories under x.prefix.
+	Links bool
+	Repos bool
+	// Imports are the import paths the site serves one by one, keyed by
+	// import path.
+	Imports map[string]Import
+}
+
+// ImportFor returns the import path of the site that a request for path,
+// a URL path, is for: the longest one that path is or is below. suffix is
+// the rest of path, such as /geometry for a package of the module.
+func (s Site) ImportFor(path string) (importPath string, imp Import, suffix string, ok bool) {
+	full := s.Host + strings.TrimSuffix(path, "/")
+	for p, i := range s.Imports {
+		if (full == p || strings.HasPrefix(full, p+"/")) && len(p) > len(importPath) {
+			importPath, imp, ok = p, i, true
+		}
+	}
+	if !ok {
+		return "", Import{}, "", false
+	}
+	return importPath, imp, full[len(importPath):], true
 }
 
 // SiteFor resolves a request's Host header to the site it belongs to.
@@ -131,6 +177,8 @@ func (c *config) SiteFor(requestHost string) Site {
 		ShowImpressum: c.GDPR.Impressum.Enable,
 		ShowPrivacy:   c.GDPR.Privacy.Enable,
 		ShowContact:   c.GDPR.Contact.Enable,
+		Links:         true,
+		Repos:         c.X.Enable,
 	}
 
 	n := NormalizeHost(requestHost)
@@ -141,7 +189,13 @@ func (c *config) SiteFor(requestHost string) Site {
 		if n != NormalizeHost(name) {
 			continue
 		}
-		s := Site{Host: n, RepoPath: cmp.Or(o.RepoPath, c.X.RepoPath)}
+		s := Site{
+			Host:     n,
+			RepoPath: cmp.Or(o.RepoPath, c.X.RepoPath),
+			Links:    o.Links == nil || *o.Links,
+			Repos:    c.X.Enable && (o.Repos == nil || *o.Repos),
+			Imports:  o.Imports,
+		}
 		if o.Legal {
 			s.ShowImpressum = c.GDPR.Impressum.Enable
 			s.ShowPrivacy = c.GDPR.Privacy.Enable
@@ -210,6 +264,9 @@ func (c *config) parse() {
 	if err != nil {
 		log.Fatalf("cannot parse configuration: %v\n", err)
 	}
+	if err := c.validate(); err != nil {
+		log.Fatalf("invalid configuration: %v\n", err)
+	}
 
 	// An unrecognised auth mode used to fall through to basic auth, which
 	// turns a typo into a silently different login. Report it here;
@@ -223,6 +280,27 @@ func (c *config) parse() {
 			c.Auth.Enable, None, Basic, Latere)
 	}
 
+}
+
+// validate reports a configuration that would serve something other than
+// what it says. An import path on another site's hostname would never be
+// asked for, and one without a repository would answer go get with nothing.
+func (c *config) validate() error {
+	for name, o := range c.Hosts {
+		host := NormalizeHost(name)
+		for p, i := range o.Imports {
+			if p != host && !strings.HasPrefix(p, host+"/") {
+				return fmt.Errorf("hosts.%s.imports: %q is not an import path of %s", name, p, host)
+			}
+			if strings.HasSuffix(p, "/") {
+				return fmt.Errorf("hosts.%s.imports: %q ends with a slash", name, p)
+			}
+			if u, err := url.Parse(i.Repo); err != nil || u.Scheme == "" || u.Host == "" {
+				return fmt.Errorf("hosts.%s.imports.%s: repo %q is not a URL", name, p, i.Repo)
+			}
+		}
+	}
+	return nil
 }
 
 var Conf config

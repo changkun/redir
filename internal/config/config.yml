@@ -25,6 +25,18 @@ cors: false
 #       # The impressum and privacy pages name an operator, so they do
 #       # not follow onto another domain unless it is the same one.
 #       legal: false
+#     poly.red:
+#       # A site offers short links under s.prefix and repositories
+#       # under x.prefix unless it turns them off.
+#       links: false
+#       repos: false
+#       # Import paths served one by one, each from its own repository:
+#       # the path and every package below it. web is where a browser
+#       # goes; unset, it is the package on godoc_host.
+#       imports:
+#         poly.red:
+#           repo: https://github.com/changkun/polyred
+#           web: https://github.com/changkun/polyred
 hosts: {}
 s:
   prefix: /s/

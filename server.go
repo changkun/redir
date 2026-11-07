@@ -5,6 +5,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"fmt"
@@ -115,17 +116,73 @@ func (s *server) close() {
 }
 
 func (s *server) registerHandler() {
-	l := utils.Logging()
+	http.Handle("/", s.handler())
+}
 
-	// semantic shortener (default)
+// handler routes a request by the site it arrived on. A site's own import
+// paths come first, so every path below one, even /s/ on poly.red, answers
+// for the module there. Then the short links and the repositories under
+// /x/, each only on a site that offers it: a site without short links must
+// not open a namespace of aliases, nor have checkvcs mint links in it.
+func (s *server) handler() http.Handler {
+	services := http.NewServeMux()
 	log.Println("router /s is enabled.")
-	http.Handle(config.Conf.S.Prefix, l(s.sHandler()))
-
-	// repo redirector
+	services.Handle(config.Conf.S.Prefix, s.sHandler())
 	if config.Conf.X.Enable {
 		log.Println("router /x is enabled.")
-		http.Handle(config.Conf.X.Prefix, l(s.xHandler()))
+		services.Handle(config.Conf.X.Prefix, s.xHandler())
 	}
+	imports := s.importHandler()
+
+	return utils.Logging()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		site := config.Conf.SiteFor(r.Host)
+		if _, _, _, ok := site.ImportFor(r.URL.Path); ok {
+			imports(w, r)
+			return
+		}
+		// The prefix without its slash too, which the mux redirects to it.
+		// An unset prefix, as x.prefix may be with x.enable false, is
+		// under nothing rather than under everything.
+		under := func(prefix string) bool {
+			return prefix != "" && strings.HasPrefix(r.URL.Path+"/", prefix)
+		}
+		if under(config.Conf.S.Prefix) && !site.Links || under(config.Conf.X.Prefix) && !site.Repos {
+			http.NotFound(w, r)
+			return
+		}
+		services.ServeHTTP(w, r)
+	}))
+}
+
+// goImport is the go-import document: the meta tag `go get` reads, and a
+// refresh for a browser that lands on it.
+type goImport struct {
+	ImportRoot string // the import path at the root of the repository
+	VCS        string
+	VCSRoot    string // the repository
+	Doc        string // where a browser is sent
+}
+
+func serveGoImport(w http.ResponseWriter, d goImport) {
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if err := xTmpl.Execute(w, d); err != nil {
+		http.Error(w, err.Error(), 500)
+	}
+}
+
+// redirectClone sends `git clone` of an import path to the repository,
+// and reports whether the request was one.
+func redirectClone(w http.ResponseWriter, req *http.Request, repoRoot, suffix string) bool {
+	if suffix != "/info/refs" || !strings.HasPrefix(req.URL.Query().Get("service"), "git-") {
+		return false
+	}
+	http.Redirect(w, req, fmt.Sprintf("%s/info/refs?%s", repoRoot, req.URL.RawQuery), http.StatusFound)
+	return true
+}
+
+// godoc is the documentation of the package at importPath.
+func godoc(importPath string) string {
+	return cmp.Or(config.Conf.X.GoDocHost, "https://pkg.go.dev/") + importPath
 }
 
 // xHandler redirect returns an HTTP handler that redirects requests for
@@ -142,7 +199,7 @@ func (s *server) xHandler() http.HandlerFunc {
 		path := strings.TrimSuffix(req.Host+req.URL.Path, "/")
 		var importRoot, repoRoot, suffix string
 		if path == importPath {
-			http.Redirect(w, req, config.Conf.X.GoDocHost+importPath, http.StatusFound)
+			http.Redirect(w, req, godoc(importPath), http.StatusFound)
 			return
 		}
 		elem := path[len(importPath)+1:]
@@ -153,27 +210,42 @@ func (s *server) xHandler() http.HandlerFunc {
 		repoRoot = site.RepoPath + "/" + elem
 
 		// Handling 'git clone https://changkun.de/x/repo'.
-		if suffix == "/info/refs" && strings.HasPrefix(req.URL.Query().Get("service"), "git-") && elem != "" {
-			http.Redirect(w, req, fmt.Sprintf("%s/info/refs?%s", repoRoot, req.URL.RawQuery), http.StatusFound)
+		if elem != "" && redirectClone(w, req, repoRoot, suffix) {
 			return
 		}
-
-		d := &struct {
-			ImportRoot string
-			VCS        string
-			VCSRoot    string
-			Suffix     string
-		}{
+		serveGoImport(w, goImport{
 			ImportRoot: importRoot,
 			VCS:        config.Conf.X.VCS,
 			VCSRoot:    repoRoot,
-			Suffix:     suffix,
-		}
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		err := xTmpl.Execute(w, d)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
+			Doc:        godoc(importRoot + suffix),
+		})
+	}
+}
+
+// importHandler answers for the import paths a site lists one by one, such
+// as poly.red, each from its own repository. `go get` gets the go-import
+// document; a browser goes to the configured page, or to the package's
+// documentation.
+func (s *server) importHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		importPath, imp, suffix, ok := config.Conf.SiteFor(req.Host).ImportFor(req.URL.Path)
+		if !ok {
+			http.NotFound(w, req)
 			return
 		}
+		if redirectClone(w, req, imp.Repo, suffix) {
+			return
+		}
+		doc := cmp.Or(imp.Web, godoc(importPath+suffix))
+		if req.URL.Query().Get("go-get") != "1" {
+			http.Redirect(w, req, doc, http.StatusFound)
+			return
+		}
+		serveGoImport(w, goImport{
+			ImportRoot: importPath,
+			VCS:        cmp.Or(config.Conf.X.VCS, "git"),
+			VCSRoot:    imp.Repo,
+			Doc:        doc,
+		})
 	}
 }
