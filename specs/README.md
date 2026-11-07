@@ -34,6 +34,12 @@ would have had two candidate causes and neither could be ruled out.
 | [006-operator-console.md](006-operator-console.md) | Complete | Rebuild the dashboard as a console: totals first, a dense listing second, one link's detail third |
 | [007-shared-design.md](007-shared-design.md) | Complete | Put the console and the server's pages in the design the urlstat dashboard uses, in light and dark |
 
+## Sites
+
+| Spec | Status | Deliverable |
+| --- | --- | --- |
+| [008-sites-choose-their-services.md](008-sites-choose-their-services.md) | In progress | Let a site turn off short links or `/x/` and list import paths of its own, and serve poly.red from redir |
+
 ## Status
 
 - ● Complete
@@ -48,6 +54,8 @@ would have had two candidate causes and neither could be ruled out.
 | 004-unify-golang-design | ● |
 | 005-drop-mongodb | ● |
 | 006-operator-console | ● |
+| 007-shared-design | ● |
+| 008-sites-choose-their-services | ◐ |
 
 ## Dependencies
 
