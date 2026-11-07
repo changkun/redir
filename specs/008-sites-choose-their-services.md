@@ -1,6 +1,6 @@
 ---
 title: Sites choose their services, and serve import paths of their own
-status: in_progress
+status: complete
 depends_on:
   - 004-unify-golang-design
 affects:
@@ -132,3 +132,21 @@ domain serves changkun.de's short links.
    gets no login.
 2. changkun.de/x/ and golang.design/x/ answer as before the change.
 3. `go list -m poly.red@latest` resolves through poly.red, not the proxy.
+
+## Outcome
+
+Completed 2026-11-07. poly.red is served by redir, as a site with
+neither short links nor `/x/`, and the container that served only it is
+removed, along with the static server's vanity mode in changkun/infra.
+
+### Verified
+
+| Check | Result |
+| --- | --- |
+| Before the switch, redir against the old container, both asked directly | identical `go-import` at `/` and `/geometry/primitive`; the same GitHub page for a browser, 302 where it was 301 |
+| `poly.red/s/foo`, `/x/foo` | the module, as before, not the shortener |
+| Login | set up for 2 sites; poly.red has none |
+| changkun.de and golang.design through redir | `/x/` names the same repositories; `/s/` serves |
+| After the switch, through traefik | the same `go-import`; every poly.red request reached redir |
+| `GOPROXY=direct go list -m poly.red@latest` | `v0.0.1` from github.com/changkun/polyred |
+| `poly.red/study` | still the study page, on its longer rule |

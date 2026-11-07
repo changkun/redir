@@ -38,7 +38,7 @@ would have had two candidate causes and neither could be ruled out.
 
 | Spec | Status | Deliverable |
 | --- | --- | --- |
-| [008-sites-choose-their-services.md](008-sites-choose-their-services.md) | In progress | Let a site turn off short links or `/x/` and list import paths of its own, and serve poly.red from redir |
+| [008-sites-choose-their-services.md](008-sites-choose-their-services.md) | Complete | Let a site turn off short links or `/x/` and list import paths of its own, and serve poly.red from redir |
 
 ## Status
 
@@ -55,7 +55,7 @@ would have had two candidate causes and neither could be ruled out.
 | 005-drop-mongodb | ● |
 | 006-operator-console | ● |
 | 007-shared-design | ● |
-| 008-sites-choose-their-services | ◐ |
+| 008-sites-choose-their-services | ● |
 
 ## Dependencies
 
