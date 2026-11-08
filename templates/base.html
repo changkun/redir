@@ -8,7 +8,7 @@ license that can be found in the LICENSE file. -->
      different site. The stylesheet lives here once rather than in each
      page, where five copies of it had drifted apart. Its colors, type and
      controls are those of dashboard/src/index.css; see
-     specs/007-shared-design.md. -->
+     specs/009-site-design.md. -->
 {{define "layout"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,44 +16,84 @@ license that can be found in the LICENSE file. -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{block "title" .}}redir{{end}}</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 3h8v8h-2.4V7.1L4.7 13 3 11.3 8.9 5.4H5z' fill='%232a78d6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 3h8v8h-2.4V7.1L4.7 13 3 11.3 8.9 5.4H5z' fill='%2338538f'/%3E%3C/svg%3E">
+<script>
+// Before the styles, so a dark page never paints light first. The key is
+// the one changkun.de's other pages keep the reader's choice under;
+// without a choice the system's setting decides.
+(function () {
+  var root = document.documentElement
+  var media = matchMedia('(prefers-color-scheme: dark)')
+  var apply = function () {
+    var t = null
+    try { t = localStorage.getItem('theme') } catch (e) {}
+    if (t !== 'light' && t !== 'dark') t = media.matches ? 'dark' : 'light'
+    root.setAttribute('data-theme', t)
+  }
+  apply()
+  media.addEventListener('change', apply)
+})()
+</script>
 <style>
+/* Inter, served from the binary rather than a font host. */
+@font-face { font-family: Inter; font-style: normal; font-weight: 400; font-display: swap; src: url({{.Prefix}}.static/fonts/inter-400-latin.woff2) format('woff2'); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 500; font-display: swap; src: url({{.Prefix}}.static/fonts/inter-500-latin.woff2) format('woff2'); }
+@font-face { font-family: Inter; font-style: normal; font-weight: 600; font-display: swap; src: url({{.Prefix}}.static/fonts/inter-600-latin.woff2) format('woff2'); }
 :root {
-  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --border: rgba(11, 11, 11, 0.1); --wash: rgba(11, 11, 11, 0.045); --pv: #2a78d6;
+  --page: #ffffff; --surface: #ffffff; --ink: #0d0d0d; --ink-2: #525252; --muted: #666666;
+  --grid: #ebebeb; --border: rgba(0, 0, 0, 0.08); --border-strong: rgba(0, 0, 0, 0.14); --wash: #f4f4f4; --navy: #38538f;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --border: rgba(255, 255, 255, 0.1); --wash: rgba(255, 255, 255, 0.06); --pv: #3987e5;
+  :root:not([data-theme="light"]) {
+    --page: #161616; --surface: #161616; --ink: #ececec; --ink-2: #b4b4b4; --muted: #9a9a9a;
+    --grid: #262626; --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14); --wash: #262626; --navy: #9bb0e4;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --page: #161616; --surface: #161616; --ink: #ececec; --ink-2: #b4b4b4; --muted: #9a9a9a;
+  --grid: #262626; --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14); --wash: #262626; --navy: #9bb0e4;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--page); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased; transition: background-color 0.3s, color 0.3s; }
 a { color: inherit; }
-main { max-width: 760px; margin: 0 auto; padding: 14px 16px 28px; }
-:focus-visible { outline: 2px solid var(--pv); outline-offset: 1px; }
+main { max-width: 760px; margin: 0 auto; padding: 20px 16px 28px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
 
-.top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
-.top h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
-.top h1 a { text-decoration: none; }
-.top p { margin: 0; color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The blog's header, as the console has it. */
+.site-header { background: var(--page); border-bottom: 1px solid var(--border); font-size: 15px; }
+.header-inner { display: flex; align-items: center; gap: 20px; padding: 16px 16px 16px clamp(16px, 2vw, 24px); }
+.brand { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0 auto 0 0; font-weight: 600; white-space: nowrap; }
+.brand a { text-decoration: none; }
+.brand .sep, .brand .where { color: var(--ink-2); font-weight: 400; }
+.brand .where { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.theme-toggle { flex: none; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px; background: none; color: var(--ink-2); cursor: pointer; transition: color 0.2s, background-color 0.2s; }
+.theme-toggle:hover { color: var(--ink); background: var(--wash); }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px 18px; }
 
 /* The legal pages are prose handed over as HTML, so they get a measure
    and a little air. The headings step down quietly. */
-.card h1 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; margin: 22px 0 8px; }
-.card h2 { font-size: 14px; font-weight: 650; margin: 20px 0 4px; }
-.card h3 { font-size: 13px; font-weight: 650; color: var(--ink-2); margin: 16px 0 2px; }
+.card h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 22px 0 8px; }
+.card h2 { font-size: 14px; font-weight: 600; margin: 20px 0 4px; }
+.card h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 16px 0 2px; }
 .card > :first-child { margin-top: 0; }
 .card > :last-child { margin-bottom: 0; }
 .card p, .card li { color: var(--ink-2); font-size: 14px; line-height: 1.6; max-width: 68ch; }
 .card p { margin: 0 0 10px; }
 .card ul { padding-left: 20px; margin: 0 0 10px; }
 .card a { text-underline-offset: 2px; overflow-wrap: anywhere; }
-.card strong { color: var(--ink); font-weight: 650; }
+/* A link in the prose wears the navy; the buttons and the warning's target keep the ink. */
+.card p a, .card li a { color: var(--navy); }
+.card strong { color: var(--ink); font-weight: 600; }
 
 .btn { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; text-decoration: none; font: inherit; }
 .btn:hover { background: var(--wash); }
@@ -67,11 +107,16 @@ main { max-width: 760px; margin: 0 auto; padding: 14px 16px 28px; }
 </style>
 </head>
 <body>
-<main>
-<header class="top">
-  <h1><a href="{{.Prefix}}">redir</a></h1>
-  <p>Short links on {{.Site}}</p>
+<header class="site-header">
+  <div class="header-inner">
+    <p class="brand"><a href="{{.Prefix}}">redir</a><span class="sep">/</span><span class="where">{{.Site}}</span></p>
+    <button class="theme-toggle" type="button" aria-label="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></g></svg>
+    </button>
+  </div>
 </header>
+<main>
 
 <section class="card">
 {{block "content" .}}{{end}}
@@ -84,6 +129,15 @@ main { max-width: 760px; margin: 0 auto; padding: 14px 16px 28px; }
   <a href="{{.Prefix}}">All links</a>
 </p>
 </main>
+<script>
+// The choice is kept under the key the other pages of the site use.
+document.querySelector('.theme-toggle').addEventListener('click', function () {
+  var root = document.documentElement
+  var t = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+  root.setAttribute('data-theme', t)
+  try { localStorage.setItem('theme', t) } catch (e) {}
+})
+</script>
 {{block "script" .}}{{end}}
 </body>
 </html>{{end}}

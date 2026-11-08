@@ -251,14 +251,23 @@ func TestServedPagesUseTheSharedLayout(t *testing.T) {
 
 		body := w.Body.String()
 		for _, want := range []string{
-			"--page: #f9f9f7", // the shared design's ground, with a dark one beside it
+			"--page: #ffffff", // changkun.de's ground, with a dark one beside it
 			"prefers-color-scheme: dark",
+			// The reader's choice of theme, under the key the rest of the
+			// site keeps it under.
+			"localStorage.getItem('theme')",
+			// Inter comes from the binary, under the configured prefix.
+			"/s/.static/fonts/inter-400-latin.woff2",
 			"changkun.de", // the site names itself
 			`class="foot"`,
 		} {
 			if !contains(body, want) {
 				t.Errorf("%v is missing %q", page, want)
 			}
+		}
+		// A visitor's address goes to no font host.
+		if contains(body, "fonts.googleapis.com") {
+			t.Errorf("%v loads a font from another host", page)
 		}
 		// The prefix is configurable, so no page may assume it.
 		if contains(body, `href="/s/.impressum"`) && config.Conf.S.Prefix != "/s/" {
