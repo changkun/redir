@@ -23,7 +23,8 @@ readers.
   neither targets nor traffic.
 - **An operator console** at `/s?mode=admin`: totals, the month as a
   chart, a dense listing with recent traffic per link, and per-link
-  detail. It follows the system's light or dark setting.
+  detail. It is light or dark as the reader chose, on it or elsewhere on
+  the site, and as the system is set otherwise.
 - **Statistics** of page and unique views over time, referring hosts,
   browsers, systems and devices. Automated traffic is classified where a
   visit is recorded and excluded from every figure, with a count of what

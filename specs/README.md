@@ -33,6 +33,7 @@ would have had two candidate causes and neither could be ruled out.
 | --- | --- | --- |
 | [006-operator-console.md](006-operator-console.md) | Complete | Rebuild the dashboard as a console: totals first, a dense listing second, one link's detail third |
 | [007-shared-design.md](007-shared-design.md) | Complete | Put the console and the server's pages in the design the urlstat dashboard uses, in light and dark |
+| [009-site-design.md](009-site-design.md) | Complete | Put the console and the server's pages in changkun.de's design: the ink palette, Inter, the blog's header and its theme button |
 
 ## Sites
 
@@ -56,6 +57,7 @@ would have had two candidate causes and neither could be ruled out.
 | 006-operator-console | ● |
 | 007-shared-design | ● |
 | 008-sites-choose-their-services | ● |
+| 009-site-design | ● |
 
 ## Dependencies
 
