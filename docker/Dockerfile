@@ -14,7 +14,7 @@ RUN npm ci
 COPY dashboard/ ./
 RUN npm run build
 
-FROM golang:1.27-alpine AS server
+FROM golang:1.27.3-alpine AS server
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
