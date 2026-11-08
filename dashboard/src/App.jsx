@@ -12,7 +12,7 @@ const flag = (root, name) => root.getAttribute(name) === 'true'
 
 // One provider for the whole console. It carries the locale and the
 // theme of the parts antd renders, the dialogs and the date pickers, in
-// the light or dark the system asks for, so a dialog is not lit
+// the light or dark the page is in, so a dialog is not lit
 // differently from the page behind it.
 const App = () => {
   const root = document.getElementById('root')

@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import App from './App'
 
 // The console replaced every component at once, so the suite renders it.
@@ -84,6 +84,29 @@ describe('the console', () => {
     expect(screen.queryByText('Account')).toBeNull()
     expect(screen.queryByText('348,465')).toBeNull()
     expect(screen.getByText('Sign in')).toBeTruthy()
+  })
+
+  it("turns the page dark and keeps the choice under the site's key", async () => {
+    // jsdom gives a page without an origin no storage, so the test brings
+    // its own.
+    const store = new Map()
+    vi.stubGlobal('localStorage', {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)),
+    })
+    mount({ 'is-admin': false })
+    document.documentElement.setAttribute('data-theme', 'light')
+    render(<App />)
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    // The key changkun.de's other pages read, so the choice holds there.
+    expect(localStorage.getItem('theme')).toBe('dark')
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(localStorage.getItem('theme')).toBe('light')
+    document.documentElement.removeAttribute('data-theme')
   })
 
   it('shows the legal links the server enabled, and no others', async () => {

@@ -310,6 +310,8 @@ func (s *server) serveStatic(
 			w.Header().Add("Content-Type", "text/css")
 		case ".js":
 			w.Header().Add("Content-Type", "text/javascript")
+		case ".woff2":
+			w.Header().Add("Content-Type", "font/woff2")
 		}
 
 		f, err := statics.Open(strings.TrimPrefix(r.URL.Path, prefix+".static/"))
