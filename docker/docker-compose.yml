@@ -2,6 +2,10 @@
 # Use of this source code is governed by a MIT
 # license that can be found in the LICENSE file.
 
+# Named, rather than after this folder, so that it is not the project
+# "docker" that other stacks on the host kept in a docker/ folder share.
+name: redir
+
 services:
   redir:
     restart: always
@@ -26,7 +30,7 @@ services:
 networks:
   traefik_proxy:
     external: true
-  # Owned by changkun/proxy, which runs the shared database instance the
+  # Owned by changkun/infra, which runs the shared database instance the
   # store lives on. See specs/001-shared-postgres.md.
   postgres_internal:
     external: true
